@@ -1,0 +1,24 @@
+# Optional configuration for an isolated test HA instance. No physical devices.
+# Merge these blocks into configuration.yaml without duplicating top-level keys.
+input_number:
+  natural_shutter_demo_position:
+    name: Natural Shutter demo actual HA position
+    min: 0
+    max: 100
+    step: 1
+    initial: 70
+    unit_of_measurement: "%"
+
+template:
+  - cover:
+      - name: Natural Shutter demo
+        unique_id: natural_shutter_demo
+        device_class: shutter
+        availability: "{{ has_value('input_number.natural_shutter_demo_position') }}"
+        position: "{{ states('input_number.natural_shutter_demo_position') | float }}"
+        set_cover_position:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.natural_shutter_demo_position
+            data:
+              value: "{{ position }}"

@@ -1,0 +1,269 @@
+# Natural Shutter architecture
+
+## Components and data model
+
+Natural Shutter is a config-entry-based device integration with the domain
+`natural_shutter`. One manually selected cover corresponds to one config entry,
+one owned virtual device, two number entities, and two sensor entities. There is
+no discovery, YAML configuration for mappings, proxy cover, custom service, custom
+card, or historical database. The integration has no third-party runtime packages.
+
+| Component | Responsibility |
+| --- | --- |
+| `const.py` | Shared product name, domain, keys, platforms, storage key |
+| `config_flow.py` | Manual source validation, duplicate checks, initial snapshot, reconfiguration |
+| `source.py` | Registry identity resolution and finite percentage validation |
+| `controller.py` | Persistent settings, load-time alignment, source availability, serialized explicit commands |
+| `device.py` | Reciprocal actuator links maintained only on the owned virtual device |
+| `entity.py` | Stable entity IDs, virtual device grouping, subscription cleanup |
+| `number.py` | Target and buffer sliders; explicit `async_set_native_value` |
+| `sensor.py` | Numeric saved-setting history sensors |
+| `__init__.py` | Setup, unload, and mapping-storage removal |
+
+Config-entry data contains `source_entity_id`, optional `source_registry_id`, and
+`initial_target`. The entry title is the user-selected label or source friendly
+name. A `ShutterController` is assigned to typed `ConfigEntry.runtime_data`.
+The current settings are an integer dictionary: `target_position` and `buffer`.
+Config-entry schema version and storage schema version are independent of the
+integration's initial release version, which is defined in `manifest.json`.
+
+## Source mapping and identities
+
+At selection, the source must exist and advertise `CoverEntityFeature.SET_POSITION`.
+An unavailable registry-backed source can use its registry feature mask; otherwise
+the active state must advertise the feature. Active sources without a valid actual
+position can still be selected, since their initial target is zero.
+
+Config-entry unique IDs are `registry:<registry-entry-id>` when available, otherwise
+`entity:<entity-id>`. Both registry identity and resolved source entity ID are checked
+for duplicates; HA's in-progress flow protection also prevents parallel selection
+of the same identity. If an already mapped unregistered source gains a registry
+record, that identity is pinned without changing settings or dispatching commands.
+Sources are never added automatically.
+
+Loading and every explicit target write resolve the registry ID again. Renaming a
+registered source therefore preserves routing and generated entity identities,
+including when the mapping was unloaded during the rename. A rename event keeps
+settings unchanged; loading aligns the target with the source's live position.
+A registry listener updates the cached source entity ID, logs removal, and rebinds
+the source state subscription after a rename. Source state events only publish
+target availability transitions; they never change settings or send an action.
+
+If a pinned registry record disappears, resolution returns no source. It never
+falls back to an entity ID that another device could reuse. The user can explicitly
+rebind the mapping through **Reconfigure**, preserving the buffer and generated
+entity identities. Its reload aligns the target with the replacement's live position
+if valid, retaining the saved target otherwise. A source without a registry identity
+can only be tracked by its
+entity ID; after a rename it needs manual reconfiguration. Such an ID can be reused
+by HA, which is an unavoidable identity limitation for unregistered sources.
+
+Generated unique IDs combine the mapping's immutable `entry_id`, platform kind,
+and setting key. A separate virtual device groups all four entities under the
+chosen shutter label. This avoids writing metadata into the manufacturer's device
+or claiming ownership of its entities. `has_entity_name` and translation keys give
+distinct names to sliders and sensors. Reconfiguring the label updates device naming
+without changing unique IDs. Removal through HA's entry UI deletes one mapping.
+
+The manifest classifies the integration as `device`, so HA's Integrations tab
+groups all config entries under Natural Shutter instead of filtering them into
+Helpers. Each config entry still owns exactly one virtual device.
+
+The virtual device always retains `(natural_shutter, entry_id)` as its stable
+identifier. `ShutterDeviceLink` reads the source entity's device and copies that
+device's identifiers and connections onto the virtual device. Since HA 2026.8,
+these keys are unique per config entry, allowing HA's `list_linked_devices` WebSocket
+endpoint to discover both navigation directions without merging devices or changing
+the source device. The implementation never adds our config entry to the source
+device, moves source entities, or writes any manufacturer metadata. All device
+lookups and updates for the virtual device are scoped to its own config entry.
+
+Source entity reassignment, changed source device keys, and reconfiguration replace
+old link keys on the same virtual device. Missing source registry records or devices
+remove the link; temporary source unavailability keeps it. Unregistered sources have
+no device to link. A child device resolves to its parent actuator because HA's
+Linked devices API only matches main devices. The device registry subscription is
+removed on unload and failed setup, and late callbacks cannot update devices.
+Link maintenance has no path to persistence or movement commands.
+
+## Persistence, initialization, and restoration
+
+Each mapping uses HA's atomic `Store` with key `natural_shutter.<entry_id>` under
+the configuration directory's `.storage`. This is a current-settings file, not a
+history archive. It is independent of Recorder and stays outside integration files
+during code updates. Saved data is validated before entities become active.
+Damaged settings stop setup with a translated error, rather than becoming a target
+of zero silently.
+
+The config flow snapshots an initial fallback target: the rounded value of
+`100 - current_position`, or zero if no valid live position exists. Buffer starts
+at zero. A missing settings file initializes from this snapshot.
+
+On every entry load, including startup, reload, and reconfiguration, the controller
+reads the resolved source's current position. A valid live value replaces the target
+with the rounded value of `100 - current_position`; the buffer is retained. If the
+source is missing, unknown, unavailable, restored, or has an invalid position, the
+saved target or initial fallback remains. Resulting settings are saved before
+activation when new or changed. This initialization calls neither the target setter
+nor command dispatch, so the buffer cannot trigger or prevent it. Later cover
+reports and reconnections cannot overwrite either value. There is no deferred
+alignment if the source becomes ready after the entry loads.
+
+Writes await `Store.async_save` before updating in-memory values, notifying entities,
+or evaluating a target command. Loading calls no setter. Reload recreates the
+controller, restores the settings file, and performs the non-actuating target
+alignment above. Entry removal deletes only that file;
+unloading retains it. HA manages disk error logging inside `Store`; durability still
+depends on a functioning storage device and HA's storage lifecycle. No filesystem
+transaction can also guarantee execution on an external physical device.
+
+## Allowed trigger and excluded events
+
+The only command entry point is the target number's `async_set_native_value`, invoked
+by explicit UI or action writes such as `number.set_value`. The controller validates
+and normalizes the input, then compares it to the saved value under its write lock.
+Equal normalized values return without a save, notification, or command.
+
+The buffer setter only saves and publishes its setting. Sensors only read stored
+values. Setup, reconfiguration, unload, restart, restoration, registry events,
+availability changes, actual position reports, external movements, and sensor
+updates have no path to command dispatch. There is no timer, retry queue, feedback
+controller, or pending target replay. Scenes that explicitly write the target are
+subject to the same equality check and validation as any other explicit action.
+
+## Conversion and buffer algorithm
+
+Input values must be finite and within 0–100 before normalization; booleans, NaN,
+infinity, and out-of-range values are rejected. Sliders use step 1. Explicit decimal
+inputs are rounded to the nearest integer, with halves rounded up. Actual source
+positions are validated but retain fractional precision.
+
+For a changed normalized target `x`, HA target `t = 100 - x`, valid live source
+position `a`, and saved buffer `b`, compute `d = abs(a - t)`.
+Send one `cover.set_cover_position` action with `position: t` iff
+`d > 0 and d >= b`. Buffer is a distance in percentage points and never offsets the
+destination. Both directions, equality at the threshold, and endpoints follow this
+same rule. The target is saved even when the buffer suppresses movement.
+
+## Availability and error handling
+
+The target number's `available` property follows the resolved source's live state
+and registry status. A missing, unknown, unavailable, restored, or disabled source
+makes the target unavailable. HA skips actions targeting this unavailable number,
+leaving its saved value unchanged. The buffer and both history sensors remain
+available. Reconnection republishes the saved target without alignment or movement.
+Invalid numeric positions and lost position support on an otherwise live source
+are handled when an explicit target write is dispatched.
+
+An accepted changed target is saved first. If the source disappears during saving,
+has an invalid actual position, becomes disabled, or loses position support, the
+command path reports a warning and translated action error. The saved setting
+remains in sensor history, even if the target slider is now unavailable. No action
+is queued. Setting the same target again after reconnection is still a no-op;
+another explicit target change is required for another attempt.
+
+Source action failures propagate as translated `HomeAssistantError`, preserving the
+original cause. Timeouts receive the same treatment. Neither case rolls back the
+target or triggers a retry. The user's action context is passed to the delegated
+cover action. The manufacturer integration owns communication, calibration, travel
+direction, action latency, and feedback correctness. A source could go offline
+between validation and dispatch; its integration determines the resulting error.
+
+## Concurrency and teardown
+
+One `asyncio.Lock` per mapping covers comparison, saving, publishing, source
+validation, and the blocking cover action. Requests are processed in lock acquisition
+order. An older command cannot overtake a newer one. Buffer changes join the same
+sequence, giving each target decision a consistent saved buffer. Different mappings
+operate independently. Ordered writes are not debounced: each distinct explicit
+target may dispatch its own command. A slow source action delays later writes for
+that mapping.
+
+Unload removes entity subscriptions, marks the controller inactive, detaches entity
+registry, device registry, and source state tracking, and waits for an already running write. Late registry or
+state callbacks cannot reattach tracking or publish updates. A save completing after the inactive
+flag is set cannot dispatch a command. Already dispatched actions and physical travel
+cannot be withdrawn. Waiting writes fail on the unloaded controller. Setup failure
+also detaches all listeners. Subscription counts and teardown are tested explicitly.
+
+## History sensors and Recorder
+
+Sensors report the saved integer percentages, including suppressed or failed targets.
+Each changed setting immediately notifies its corresponding slider and sensor.
+Setting the same normalized value sends no notification. The target sensor reflects
+the value aligned at load; later source state events do not change its numeric value.
+Sensors carry `%` and suggested display precision zero.
+They intentionally have no statistics state class: charting settings through ordinary
+Recorder history preserves transitions without presenting hourly averages as an
+archive of commands. Recorder filters and retention control history availability.
+No history backdating or retention guarantees are implemented.
+
+## Compatibility and official references
+
+Both READMEs display the supplied `docs/banner.png` directly below their title.
+The supplied square integration icon lives at
+`custom_components/natural_shutter/brand/icon.png`. HA 2026.3+ discovers this local
+brand directory automatically; no manifest icon field or custom HTTP view is needed.
+The same file supplies logo, dark-mode, and high-resolution fallbacks through HA's
+brands API. All supported HA versions include local brand discovery.
+
+The declared minimum is HA **2026.8.0**, which introduced device ownership and
+identifier uniqueness per config entry. The scoped lookup and reciprocal-link
+APIs were checked in the official 2026.8.0 source. Setup compares HA's version
+against the shared `MIN_HA_VERSION` before loading settings or registering devices;
+older versions produce a translated `ConfigEntryError`. This also protects manual
+installations that bypass HACS's minimum-version check. The pinned test stack uses
+Python 3.14 and HA 2026.9.4; the minimum runtime has not been exercised in full.
+
+References checked during implementation on 2026-10-04:
+
+- [HA config flows](https://developers.home-assistant.io/docs/core/integration/config_flow/)
+  and [runtime data](https://developers.home-assistant.io/blog/2024/04/30/store-runtime-data-inside-config-entry/).
+- [Number entities](https://developers.home-assistant.io/docs/core/entity/number/),
+  [sensor entities](https://developers.home-assistant.io/docs/core/entity/sensor/),
+  and [localization](https://developers.home-assistant.io/docs/internationalization/core/).
+- [Entity availability](https://developers.home-assistant.io/docs/core/entity/) and
+  [state event subscriptions](https://developers.home-assistant.io/docs/integration_listen_events/)
+  were checked when implementing source availability propagation.
+- [HA integration manifest](https://developers.home-assistant.io/docs/creating_integration_manifest/).
+- [HA 2026.8 device ownership](https://developers.home-assistant.io/blog/2026/07/21/device-registry-single-config-entry/),
+  its [device registry](https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/helpers/device_registry.py),
+  and [Linked devices endpoint](https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/components/config/device_registry.py).
+- [HACS integration requirements](https://www.hacs.dev/docs/publish/integration/),
+  [repository metadata](https://hacs.dev/docs/publish/start/), and
+  [HA brand images](https://developers.home-assistant.io/docs/core/integration/brand_images/).
+- README organization was informed by the reachable
+  [Manual Energy Metering](https://github.com/jan-brinkmann/ha-manual-energy-metering)
+  and [Shelly LED Control](https://github.com/jan-brinkmann/ha-shelly-led-control)
+  projects. At the owner's subsequent request, the same MIT licensing and codeowner
+  were adopted, with `jan-brinkmann/ha-natural-shutter` configured as the planned
+  repository. It does not exist yet; no release claims were reused.
+
+## Test strategy and known limits
+
+The test suite loads the real integration, config flows, number/sensor platforms,
+registry machinery, translations, and cover service in isolated HA instances.
+Simulated `CoverEntity` objects record position commands and expose controlled
+positions, availability, failures, and action gates. Tests explicitly assert the
+absence of unauthorized commands, not just the resulting saved values.
+
+Coverage includes selection, duplicate rejection, independent mappings, initial
+values, percentage conversion, buffer boundary cases, endpoints, normalization,
+invalid input, offline writes, external motion, restoration, reload, restart into a
+fresh HA instance, sensors, action errors and contexts, source renaming/removal,
+reconfiguration, listener cleanup, removal, and rapid writes. The fresh-instance
+test uses HA's mocked storage and explicitly restores the simulated source registry
+snapshot. It is not an operating-system reboot or a physical device test.
+
+Device tests query HA's real WebSocket endpoints for integration filtering and
+reciprocal links. They check that manufacturer devices and source entities remain
+identical through setup, reload, reconfiguration, and removal, including sources
+with identifiers only, connections only, and offline states. They also cover late
+device association, changed keys, source removal, child channels, device listener
+cleanup, and rejection of older HA versions before any storage or device writes.
+
+See [Testing](docs/TESTING.md) for commands and [Publishing](docs/PUBLISHING.md) for
+remaining repository setup and validation. HACS installation, remote HACS validation,
+hardware behavior, browser rendering, and the minimum HA runtime have not been
+tested. Source feature declarations and current positions must be trustworthy;
+the integration cannot detect firmware or calibration errors.

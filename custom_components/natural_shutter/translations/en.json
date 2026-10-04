@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a shutter",
+        "description": "Select an existing cover supporting position commands. At each load, the target adopts a valid current position without movement. Target position: 0% fully open, 100% fully closed. Buffer is the minimum difference in percentage points before a changed target sends a command. Adjust both sliders after setup.",
+        "data": {"source_entity_id": "Source cover", "name": "Name (optional)"}
+      },
+      "reconfigure": {
+        "title": "Reconfigure shutter",
+        "description": "Change the name or select a replacement source. The buffer is retained. On reload, the target adopts a valid current source position; otherwise the saved target is retained. Reconfiguration never moves a shutter. A removed registry source must be selected again explicitly.",
+        "data": {"source_entity_id": "Source cover", "name": "Name (optional)"}
+      }
+    },
+    "error": {
+      "source_not_found": "Select an existing cover entity.",
+      "position_unsupported": "This cover does not advertise support for position commands."
+    },
+    "abort": {
+      "already_configured": "This cover has already been added.",
+      "already_in_progress": "This cover is already being configured.",
+      "entry_not_found": "The configuration entry no longer exists.",
+      "reconfigure_successful": "The shutter configuration has been updated. No movement was triggered."
+    }
+  },
+  "entity": {
+    "number": {
+      "target_position": {"name": "Target position"},
+      "buffer": {"name": "Buffer"}
+    },
+    "sensor": {
+      "target_position": {"name": "Target position history"},
+      "buffer": {"name": "Buffer history"}
+    }
+  },
+  "exceptions": {
+    "unsupported_home_assistant": {"message": "Natural Shutter requires Home Assistant {version} or newer to link devices without modifying the source device. Update Home Assistant before loading this integration."},
+    "invalid_percentage": {"message": "Enter a finite value between 0 and 100. Values are rounded to whole percentages."},
+    "entry_unloaded": {"message": "This shutter configuration is unloaded. Reload it before changing settings."},
+    "invalid_storage": {"message": "The saved shutter settings are invalid. Setup was stopped without moving the shutter. Restore a valid Home Assistant backup or remove and add this configuration again."},
+    "source_unavailable": {"message": "The target was saved, but the source cover is missing, unknown or unavailable. No movement was triggered or queued."},
+    "invalid_position": {"message": "The target was saved, but the source has no valid actual position between 0 and 100. No movement was triggered or queued."},
+    "position_unsupported": {"message": "The target was saved, but the source is disabled or no longer supports position commands. No movement was triggered or queued."},
+    "command_failed": {"message": "The target was saved, but the cover action failed: {error}. No automatic retry will occur."}
+  }
+}

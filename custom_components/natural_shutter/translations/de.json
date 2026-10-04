@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rollladen hinzufügen",
+        "description": "Wähle eine vorhandene Cover-Entität mit Unterstützung für Positionsbefehle. Bei jedem Laden übernimmt das Ziel eine gültige Istposition ohne Fahrt. Ziel-Position: 0 % vollständig geöffnet, 100 % vollständig geschlossen. Der Puffer ist der Mindestabstand in Prozentpunkten, ab dem eine Zieländerung einen Fahrbefehl sendet. Beide Regler stehen nach der Einrichtung zur Verfügung.",
+        "data": {"source_entity_id": "Quell-Rollladen", "name": "Name (optional)"}
+      },
+      "reconfigure": {
+        "title": "Rollladen neu konfigurieren",
+        "description": "Ändere den Namen oder wähle eine Ersatzquelle. Der Puffer bleibt erhalten. Beim erneuten Laden übernimmt das Ziel eine gültige Istposition der Quelle; andernfalls bleibt das gespeicherte Ziel erhalten. Die Neukonfiguration löst keine Fahrt aus. Eine aus der Registry entfernte Quelle muss ausdrücklich erneut ausgewählt werden.",
+        "data": {"source_entity_id": "Quell-Rollladen", "name": "Name (optional)"}
+      }
+    },
+    "error": {
+      "source_not_found": "Wähle eine vorhandene Cover-Entität.",
+      "position_unsupported": "Dieser Rollladen meldet keine Unterstützung für Positionsbefehle."
+    },
+    "abort": {
+      "already_configured": "Dieser Rollladen wurde bereits hinzugefügt.",
+      "already_in_progress": "Dieser Rollladen wird bereits eingerichtet.",
+      "entry_not_found": "Der Konfigurationseintrag ist nicht mehr vorhanden.",
+      "reconfigure_successful": "Die Rollladenkonfiguration wurde aktualisiert. Es wurde keine Fahrt ausgelöst."
+    }
+  },
+  "entity": {
+    "number": {
+      "target_position": {"name": "Ziel-Position"},
+      "buffer": {"name": "Puffer"}
+    },
+    "sensor": {
+      "target_position": {"name": "Ziel-Position Verlauf"},
+      "buffer": {"name": "Puffer Verlauf"}
+    }
+  },
+  "exceptions": {
+    "unsupported_home_assistant": {"message": "Natural Shutter benötigt Home Assistant ab {version}, um Geräte zu verknüpfen, ohne das Quellgerät zu ändern. Aktualisiere Home Assistant vor dem Laden dieser Integration."},
+    "invalid_percentage": {"message": "Gib einen endlichen Wert zwischen 0 und 100 ein. Werte werden auf ganze Prozent gerundet."},
+    "entry_unloaded": {"message": "Diese Rollladenkonfiguration ist entladen. Lade sie vor dem Ändern der Einstellungen erneut."},
+    "invalid_storage": {"message": "Die gespeicherten Rollladeneinstellungen sind ungültig. Die Einrichtung wurde ohne Fahrt gestoppt. Stelle eine gültige Home-Assistant-Sicherung wieder her oder entferne diese Konfiguration und füge sie erneut hinzu."},
+    "source_unavailable": {"message": "Das Ziel wurde gespeichert, aber die Quelle fehlt, ist unbekannt oder nicht verfügbar. Es wurde keine Fahrt ausgelöst oder vorgemerkt."},
+    "invalid_position": {"message": "Das Ziel wurde gespeichert, aber die Quelle liefert keine gültige Istposition zwischen 0 und 100. Es wurde keine Fahrt ausgelöst oder vorgemerkt."},
+    "position_unsupported": {"message": "Das Ziel wurde gespeichert, aber die Quelle ist deaktiviert oder unterstützt keine Positionsbefehle mehr. Es wurde keine Fahrt ausgelöst oder vorgemerkt."},
+    "command_failed": {"message": "Das Ziel wurde gespeichert, aber der Cover-Aktionsaufruf ist fehlgeschlagen: {error}. Es erfolgt keine automatische Wiederholung."}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "natural_shutter",
+  "name": "Natural Shutter",
+  "codeowners": ["@jan-brinkmann"],
+  "config_flow": true,
+  "dependencies": ["cover"],
+  "documentation": "https://github.com/jan-brinkmann/ha-natural-shutter#readme",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/jan-brinkmann/ha-natural-shutter/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

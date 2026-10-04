@@ -1,0 +1,299 @@
+Entwickle eine Home-Assistant-Custom-Integration namens **Natural Shutter**, die später über HACS als benutzerdefiniertes Repository installierbar sein soll.
+
+Setze die folgenden Anforderungen vollständig um, einschließlich Tests und Dokumentation. Prüfe zuerst vorhandene Projektdateien, geltende AGENTS.md-Anweisungen sowie die aktuellen offiziellen Dokumentationen von Home Assistant und HACS.
+
+## 1. Projektvorgaben
+
+- Vorläufiger Anzeigename: `Natural Shutter`
+- Technische Domain: `natural_shutter`
+- Initiale Version: **1.0.0**
+- Nach der initialen Festlegung darfst du Versionsnummern ausschließlich auf meine ausdrückliche Anweisung ändern.
+- Es gibt noch kein Git-Repository. Erstelle die Projektstruktur lokal; initialisiere kein Repository.
+- **Keine Schreiboperationen in Git:** insbesondere kein Init, Add, Commit, Tag, Branch-Anlegen, Checkout, Reset, Stash, Merge, Rebase oder Push. Git-Konfiguration und Remotes nicht verändern.
+- Lesende Git-Befehle sind erlaubt, falls später ein Repository vorhanden ist.
+- Projektdateien dürfen erstellt und bearbeitet werden.
+- Keine Veröffentlichung, Releases oder Pull Requests erstellen.
+- Keine Änderungen am Home-Assistant-Core oder an Herstellerintegrationen.
+- Keine produktive HA-Installation verändern und keine echten Rollläden bewegen.
+- Bewahre vorhandene, nicht zur Aufgabe gehörende Änderungen.
+
+Der Name kann später geändert werden. Halte projektweite Namen und Konstanten konsistent und vermeide unnötig verstreute Namensdefinitionen.
+
+## 2. Produktziel
+
+Die Integration ergänzt bestehende Rollladen-Entitäten aus beliebigen HA-Integrationen, beispielsweise Homematic IP und Shelly.
+
+Nutzer fügen ihre Rollläden **manuell über die HA-Oberfläche** hinzu. Keine automatische Aufnahme bestehender oder neuer Rollläden.
+
+Es werden **keine Proxy-Cover und keine Spiegelung der tatsächlichen Position als Zielwert** erstellt.
+
+Stattdessen erhält jeder hinzugefügte Rollladen zwei eigenständige, dauerhaft gespeicherte Einstellwerte als Schieberegler:
+
+| Deutsch | Englisch | Typ | Bereich |
+|---|---|---|---|
+| Ziel-Position | Target position | `number` mit Slider-Darstellung | 0–100 %, Schrittweite 1 |
+| Puffer | Buffer | `number` mit Slider-Darstellung | 0–100 %, Schrittweite 1 |
+
+Die Ziel-Position verwendet die gewünschte Skala:
+
+- **0 % = vollständig geöffnet**
+- **100 % = vollständig geschlossen**
+
+Die vorhandene Cover-Entität behält ihre ursprüngliche HA-Semantik. Gerätekommunikation, Fahrtrichtung und Kalibrierung bleiben Aufgabe der bestehenden Herstellerintegration.
+
+## 3. Manuelle Einrichtung
+
+Implementiere Config Flow und gegebenenfalls Options Flow.
+
+- Nutzer wählen ein vorhandenes `cover` aus.
+- Pro hinzugefügtem Rollladen entstehen genau die beiden Einstellregler und die beiden unten beschriebenen Sensoren.
+- Verhindere doppelte Aufnahme derselben Quell-Entität.
+- Prüfe, ob die Quelle Positionsbefehle unterstützt.
+- Eine vorübergehende Nichtverfügbarkeit darf eine bestehende Zuordnung nicht löschen.
+- Unterstütze mehrere Rollläden mit unabhängig gespeicherten Einstellungen.
+- Ermögliche das Entfernen einzelner Zuordnungen.
+- Verwende stabile Identitäten und berücksichtige Entity-ID-Umbenennungen, soweit eine stabile Registry-Identität vorhanden ist.
+- Nutze sinnvolle Gerätezuordnung und übersetzte Entitätsnamen, damit mehrere Rollläden eindeutig unterscheidbar sind.
+
+Eine eigene YAML-Konfiguration pro Rollladen darf nicht erforderlich sein.
+
+## 4. Entscheidender Unterschied: gespeichertes Ziel statt Positionsspiegel
+
+Die Ziel-Position ist der zuletzt eingestellte Sollwert. Sie ist **keine Anzeige der tatsächlichen Rollladenposition**.
+
+Wenn jemand den Rollladen anderswo bewegt, bleibt die Ziel-Position unverändert, beispielsweise bei Bedienung über:
+
+- Wandtaster;
+- Homematic-IP- oder Shelly-App;
+- Alexa;
+- das ursprüngliche Cover in Home Assistant;
+- eine andere Automation, die das ursprüngliche Cover steuert.
+
+Auch Rückmeldungen während einer Fahrt verändern die Ziel-Position nicht.
+
+Die Integration ist **kein dauerhaft nachregelnder Positionsregler**. Sie versucht nicht, den gespeicherten Sollwert später automatisch wiederherzustellen.
+
+## 5. Exakte Auslösebedingungen
+
+Ein Fahrbefehl darf ausschließlich aus einer **expliziten Änderung des numerischen Zielwertes** entstehen:
+
+- durch Nutzerbedienung der Ziel-Position;
+- durch eine Automation oder einen entsprechenden Aktionsaufruf, beispielsweise `number.set_value`.
+
+Dabei muss sich der neue normalisierte Zielwert vom bisher gespeicherten Zielwert unterscheiden.
+
+Insbesondere dürfen folgende Ereignisse **keinen Fahrbefehl** auslösen:
+
+- Erstinstallation oder Hinzufügen eines Rollladens;
+- Laden oder Neuladen der Integration;
+- HA-Neustart;
+- Wiederherstellung gespeicherter Werte;
+- Wechsel von `unknown` oder `unavailable` zu einem gültigen Zustand;
+- Wiederverbindung der Quelle;
+- Positionsänderung oder Zustandsmeldung des ursprünglichen Covers;
+- Änderung des Puffers;
+- erneutes Setzen derselben Ziel-Position.
+
+Implementiere die Befehlsauslösung direkt im expliziten Schreibpfad der Ziel-Position. Verwende keinen allgemeinen Zustandslistener, der auch Wiederherstellung oder Verfügbarkeitswechsel als Bedienung interpretieren könnte.
+
+## 6. Umrechnung und Puffer
+
+Bei einer gültigen Zieländerung:
+
+- `x` = neue Ziel-Position in der Natural-Shutter-Skala;
+- `t = 100 − x` = Zielposition für das ursprüngliche HA-Cover;
+- `a` = aktuelle gültige `current_position` der Quelle;
+- `b` = eingestellter Puffer;
+- `d = abs(a − t)` = Abstand in Prozentpunkten.
+
+Sende genau dann einen Positionsbefehl, wenn:
+
+**`d > 0` und `d >= b`**
+
+Der Befehl lautet sinngemäß:
+
+`cover.set_cover_position` mit `position: t`
+
+Der Puffer ist eine Mindestabweichung in **Prozentpunkten**, kein relativer Prozentsatz. Er wird weder zum Ziel addiert noch davon abgezogen.
+
+Beispiel: Ziel-Position 70 %, daraus HA-Ziel 30 %, Puffer 10 %:
+
+| Aktuelle HA-Position | Abstand | Verhalten |
+|---|---:|---|
+| 45 % | 15 Prozentpunkte | Auf 30 % fahren |
+| 40 % | 10 Prozentpunkte | Auf 30 % fahren |
+| 35 % | 5 Prozentpunkte | Kein Fahrbefehl |
+| 30 % | 0 Prozentpunkte | Kein Fahrbefehl |
+| 20 % | 10 Prozentpunkte | Auf 30 % fahren |
+| 15 % | 15 Prozentpunkte | Auf 30 % fahren |
+
+Weitere Vorgaben:
+
+- Initialer Puffer bei jedem neu hinzugefügten Rollladen: **0 %**.
+- Bei Puffer 0 führt jede tatsächliche Zieländerung mit abweichender Istposition zu einem Fahrbefehl.
+- Ist die Quelle bereits am Ziel, keinen redundanten Befehl senden.
+- Die Ziel-Position wird auch dann gespeichert, wenn der Puffer eine Fahrt verhindert.
+- Eine Pufferänderung löst weder eine Fahrt noch eine erneute Prüfung eines früheren Zieles aus.
+- Spätere Istpositionsänderungen führen ebenfalls zu keiner erneuten Prüfung.
+- Keine Sonderbehandlung der Endlagen 0 und 100: Auch dort gilt der Puffer.
+
+## 7. Wiederherstellung, Initialisierung und Fehler
+
+Speichere Ziel-Position und Puffer dauerhaft und stelle beide nach Neustart oder Reload ohne Geräteaktion wieder her.
+
+Für das erstmalige Hinzufügen gilt:
+
+- Puffer auf 0 setzen.
+- Ziel-Position einmalig aus `100 − current_position` initialisieren, falls eine gültige Istposition vorliegt.
+- Andernfalls Ziel-Position mit 0 initialisieren.
+- Diese Initialisierung löst niemals eine Fahrt aus.
+- Eine später eintreffende Istposition darf die initialisierte Ziel-Position nicht automatisch ändern.
+
+Die Einstellwerte sollen nach Möglichkeit auch bei vorübergehend nicht erreichbarem Quell-Cover bedienbar bleiben.
+
+Wird das Ziel geändert, während die Quelle nicht verfügbar ist oder keine gültige Istposition liefert:
+
+- den neuen Zielwert speichern;
+- keinen Fahrbefehl senden;
+- den übersprungenen Befehl nachvollziehbar melden;
+- keine Fahrt für später vormerken;
+- bei Wiederverfügbarkeit nicht automatisch nachholen.
+
+Auch bei einem fehlgeschlagenen Aktionsaufruf keine automatische Wiederholung nach Wiederverbindung.
+
+Validiere Eingaben und Quellwerte. Keine NaN-Werte, unendlichen Zahlen oder Werte außerhalb 0–100 akzeptieren. Ungültige Istwerte niemals stillschweigend als 0 interpretieren. Behandle schnelle aufeinanderfolgende Schreibzugriffe konsistent; vermeide durch Race Conditions verspätet gesendete ältere Ziele.
+
+## 8. Sensoren für den Verlauf
+
+Erzeuge zusätzlich pro Rollladen zwei numerische Sensoren:
+
+- einen Sensor für die eingestellte Ziel-Position;
+- einen Sensor für den eingestellten Puffer.
+
+Diese Sensoren spiegeln ausschließlich die gespeicherten Einstellwerte, nicht die tatsächliche Rollladenposition.
+
+Anforderungen:
+
+- Prozent-Einheit und sinnvolle Genauigkeit;
+- stabile Unique-IDs;
+- übersetzte Namen, unterscheidbar von den Reglern;
+- zeitnahe Aktualisierung bei Änderung des jeweiligen Einstellwertes;
+- keine Geräteaktionen durch Sensoraktualisierungen;
+- normale Nutzbarkeit im HA-Verlauf über Recorder.
+
+Zweck ist, später nachvollziehen zu können, wann welche Ziel- und Pufferwerte eingestellt wurden. Erneutes Setzen desselben Wertes muss kein zusätzliches Verlaufsereignis erzeugen.
+
+Implementiere keine eigene historische Datenbank. Dokumentiere knapp, dass Historienverfügbarkeit und Aufbewahrungsdauer von der Recorder-Konfiguration abhängen. Behaupte keine langfristige Speicherung, wenn sie nicht eingerichtet ist.
+
+## 9. Oberfläche und Übersetzungen
+
+- Deutsche und englische Übersetzungen für Einrichtung, Optionen, Entitäten und Fehlermeldungen.
+- Verwende HA-Übersetzungsmechanismen.
+- Deutsche Reglernamen exakt: **Ziel-Position** und **Puffer**.
+- Englische Reglernamen: **Target position** und **Buffer**.
+- Verständliche Erklärung des Puffers als Mindestabstand in Prozentpunkten.
+- Beide Zahlen-Entitäten sollen in unterstützten HA-Standardoberflächen als Schieberegler erscheinen.
+- Liefere eine einfache Dashboard-Beispielkonfiguration mit Standardkarten.
+
+Eine zusätzliche Custom Card und zusätzliche Öffnen-/Stopp-/Schließen-Buttons gehören nicht zum Umfang dieser Version.
+
+## 10. HACS und Repository-Vorbereitung
+
+Erstelle eine vollständige, für spätere Veröffentlichung geeignete Projektstruktur mit:
+
+- Integration unter `custom_components/natural_shutter/`;
+- erforderlichen Metadaten und HACS-Konfiguration;
+- Übersetzungen;
+- Tests;
+- Dokumentation;
+- initialem Changelog für Version 1.0.0.
+
+Prüfe aktuelle HA- und HACS-Anforderungen. Leite eine sinnvolle HA-Mindestversion aus den tatsächlich verwendeten APIs ab.
+
+Da noch kein Repository existiert:
+
+- keine erfundenen GitHub-Adressen oder Benutzernamen als echte Angaben verwenden;
+- notwendige Veröffentlichungsplatzhalter eindeutig kennzeichnen;
+- ausstehende Metadaten vor Veröffentlichung auflisten;
+- keine bereits erfolgreiche HACS-Installation oder offizielle HACS-Aufnahme behaupten.
+
+## 11. Dokumentation
+
+Erstelle:
+
+- `README.md` auf Englisch;
+- `README.de.md` auf Deutsch;
+- `ARCHITECTURE.md` ausschließlich auf Englisch.
+
+Orientiere dich für die README-Struktur an:
+
+- https://github.com/jan-brinkmann/ha-manual-energy-metering
+- https://github.com/jan-brinkmann/ha-shelly-led-control
+
+Lies beide Vorbilder, soweit erreichbar. Falls der Zugriff scheitert, verwende die folgende Struktur und benenne die Einschränkung in deinem Abschlussbericht.
+
+Die beiden READMEs sollen sich auf Nutzer konzentrieren:
+
+1. Name und kurzer Nutzen.
+2. Gut sichtbarer Link auf die andere Sprache.
+3. Kurze Funktionsübersicht in Stichpunkten.
+4. Verständliche Erklärung von Ziel-Position und Puffer.
+5. Ein einfaches Anwendungsbeispiel.
+6. Installation über HACS als Custom Repository und manuelle Installation, mit klar gekennzeichneten Platzhaltern.
+7. Einrichtung und tägliche Verwendung.
+8. Kurze Hinweise zu Verhalten und Grenzen.
+9. Entfernen der Integration.
+
+Keine langen technischen Ausführungen in den READMEs. Besonders verständlich erklären, dass externe Bewegungen die Ziel-Position nicht verändern und Neustarts keine Fahrt auslösen.
+
+`ARCHITECTURE.md` enthält dagegen:
+
+- Komponenten und Datenmodell;
+- Quellzuordnung und Identitäten;
+- Persistenz und Wiederherstellung;
+- erlaubte Auslöser und ausdrücklich ausgeschlossene Ereignisse;
+- Umrechnung und Pufferalgorithmus;
+- Verfügbarkeit und Fehlerbehandlung;
+- Nebenläufigkeit;
+- Sensoren und Recorder-Verhalten;
+- Teststrategie und bekannte Grenzen.
+
+## 12. Tests und Abnahmekriterien
+
+Schreibe aussagekräftige Tests mit simulierten Cover-Entitäten. Keine echten Geräte ansteuern.
+
+Prüfe mindestens:
+
+- Manuelles Hinzufügen und Duplikatvermeidung.
+- Unabhängige Werte für mehrere Rollläden.
+- Initialer Puffer 0.
+- Initialisierung mit und ohne gültige Istposition.
+- Umrechnung für 0, 25, 50, 75 und 100.
+- Pufferprüfung auf beiden Seiten des Zieles.
+- Abstand kleiner, gleich und größer als Puffer.
+- Puffer 0, Puffer 100 und bereits erreichte Zielposition.
+- Zielwert wird trotz unterdrückter Fahrt gespeichert.
+- Pufferänderung löst keine Fahrt aus.
+- Unveränderter Zielwert löst keine Fahrt aus.
+- Externe Cover-Bewegungen ändern weder Zielwert noch Puffer und lösen keine Nachregelung aus.
+- Neustart, Reload, Wiederherstellung und Verfügbarkeitswechsel lösen keine Fahrt aus.
+- Zieländerung bei nicht verfügbarer Quelle wird gespeichert, aber nicht später nachgeholt.
+- Sensoren bilden die Einstellwerte korrekt ab.
+- Fehlerweitergabe, Listener-Bereinigung, Umbenennung und Entfernen von Quellen.
+- Konsistentes Verhalten bei schnell aufeinanderfolgenden Zieländerungen.
+
+Die Tests müssen die Abwesenheit unerlaubter Fahrbefehle ausdrücklich prüfen.
+
+## 13. Arbeitsweise und Ergebnis
+
+Triff gewöhnliche technische Detailentscheidungen selbstständig. Frage nur bei echten Blockaden oder wesentlichen unaufgelösten Produktentscheidungen nach.
+
+Liefere die vollständige lokale Implementierung. Berichte abschließend:
+
+- welche Funktionen umgesetzt wurden;
+- welche Prüfungen tatsächlich ausgeführt wurden und mit welchem Ergebnis;
+- welche Punkte ungetestet oder eingeschränkt sind;
+- wie ich lokal installieren und testen kann;
+- welche Angaben vor einer späteren HACS-Veröffentlichung ergänzt werden müssen.
+
+Behaupte keine Hardwaretests, HACS-Installation oder erfolgreichen Prüfungen, die nicht stattgefunden haben. Halte während der gesamten Arbeit die Git- und Versionsvorgaben ein.

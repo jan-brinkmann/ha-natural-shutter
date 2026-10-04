@@ -1,0 +1,20 @@
+# Paste this card into a manual dashboard card; replace all four entity IDs.
+# Entity IDs depend on the setup language and user-selected shutter name.
+type: vertical-stack
+cards:
+  - type: entities
+    title: Natural Shutter — Living room
+    show_header_toggle: false
+    entities:
+      - entity: number.living_room_target_position
+        name: Target position (0% open, 100% closed)
+      - entity: number.living_room_buffer
+        name: Buffer (minimum difference in percentage points)
+  - type: history-graph
+    title: Saved settings
+    hours_to_show: 24
+    entities:
+      - entity: sensor.living_room_target_position_history
+        name: Target position
+      - entity: sensor.living_room_buffer_history
+        name: Buffer
