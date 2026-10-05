@@ -1,11 +1,11 @@
-"""Record position decisions and optionally notify phones of suppressed movement."""
+"""Record decisions and external alignment; notify phones only for suppression."""
 
 import asyncio
 import logging
 
 from homeassistant.components.logbook import async_log_entry
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.translation import async_get_translations
@@ -14,6 +14,51 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_NOTIFICATION_SERVICE, DOMAIN, MOBILE_APP_SERVICE_PREFIX, TARGET
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@callback
+def async_log_target_activity(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    title: str,
+    message: str,
+    context: Context | None,
+) -> None:
+    """Associate an Activity entry with the current target number and virtual device."""
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "number", DOMAIN, f"{entry.entry_id}_number_{TARGET}"
+    )
+    async_log_entry(
+        hass, title, message, domain=DOMAIN, entity_id=entity_id, context=context
+    )
+
+
+async def async_report_alignment(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    source: str,
+    previous_target: int,
+    target: int,
+    position: float,
+    context: Context | None,
+) -> None:
+    """Log a persisted target change caused by external movement without phone push."""
+    timestamp = dt_util.now().isoformat(sep=" ", timespec="seconds")
+    translations = await async_get_translations(
+        hass, hass.config.language, "common", [DOMAIN]
+    )
+    prefix = f"component.{DOMAIN}.common."
+    title = translations[f"{prefix}external_alignment_title"].format(name=entry.title)
+    message = translations[f"{prefix}external_alignment_message"].format(
+        timestamp=timestamp,
+        source=source,
+        previous_target=previous_target,
+        target=target,
+        actual=f"{100 - position:g}",
+        position=f"{position:g}",
+    )
+    async_log_target_activity(hass, entry, title, message, context)
 
 
 async def async_report_decision(
@@ -67,12 +112,7 @@ async def async_report_decision(
         distance=f"{distance:g}",
         buffer=buffer,
     )
-    entity_id = er.async_get(hass).async_get_entity_id(
-        "number", DOMAIN, f"{entry.entry_id}_number_{TARGET}"
-    )
-    async_log_entry(
-        hass, title, message, domain=DOMAIN, entity_id=entity_id, context=context
-    )
+    async_log_target_activity(hass, entry, title, message, context)
     if command_sent:
         return
     service = entry.options.get(CONF_NOTIFICATION_SERVICE)

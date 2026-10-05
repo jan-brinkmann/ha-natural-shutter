@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Add a shutter",
-        "description": "Select an existing cover supporting position commands. At each load, the target adopts a valid current position without movement. Target position: 0% fully open, 100% fully closed. Buffer is the minimum difference in percentage points before a changed target sends a command. Adjust both sliders after setup.",
+        "description": "Select an existing cover supporting position commands. At load and after movement, the target adopts the equivalent actual position without sending a command. During reported movement it keeps your setting; without a known live position it is unavailable. Target position: 0% fully open, 100% fully closed. Buffer is the minimum difference in percentage points before a changed target sends a command. Adjust both sliders after setup.",
         "data": {"source_entity_id": "Source cover", "name": "Name (optional)"}
       },
       "reconfigure": {
         "title": "Reconfigure shutter",
-        "description": "Change the name or select a replacement source. The buffer is retained. On reload, the target adopts a valid current source position; otherwise the saved target is retained. Reconfiguration never moves a shutter. A removed registry source must be selected again explicitly.",
+        "description": "Change the name or select a replacement source. The buffer is retained. On reload, an idle target adopts a valid current source position. During reported movement alignment waits for stop; without a known live position the target is unavailable. Reconfiguration never moves a shutter. A removed registry source must be selected again explicitly.",
         "data": {"source_entity_id": "Source cover", "name": "Name (optional)"}
       }
     },
@@ -26,9 +26,9 @@
   "options": {
     "step": {
       "init": {
-        "title": "Notifications for suppressed movement",
-        "description": "Choose a phone registered with the Home Assistant Companion App, or disable push notifications. A changed target suppressed by the position/buffer rule always creates an Activity entry. This option takes effect immediately without reloading or moving the shutter.",
-        "data": {"notification_service": "Phone notification service"}
+        "title": "Notifications and position alignment",
+        "description": "Choose a Companion App phone or disable push notifications. For covers without movement status, set a quiet interval longer than the pauses between position reports. After this interval the target adopts the last position, without movement or notification. Covers reporting opening/closing use two seconds after stopping. Changes apply without reloading.",
+        "data": {"notification_service": "Phone notification service", "position_quiet_seconds": "Quiet interval without movement status (seconds)"}
       }
     },
     "error": {
@@ -40,6 +40,8 @@
     "notification_unavailable": "{service} (unavailable)",
     "movement_suppressed_title": "{name}: No movement",
     "movement_command_title": "{name}: Position command sent",
+    "external_alignment_title": "{name}: Target updated",
+    "external_alignment_message": "{timestamp} · {source}: Target updated after an external position change. Target {previous_target} → {target} %, actual {actual} % (HA {position} %). Natural Shutter did not send a movement command for this change.",
     "movement_decision_message": "{timestamp} · {source}: {reason}. Target {previous_target} → {target} %, actual {actual} % (HA {position} %), HA target {ha_target} %, difference {distance} pp, buffer {buffer} pp.",
     "command_sent": "Position command sent to source cover",
     "already_at_target": "Already at the requested position",

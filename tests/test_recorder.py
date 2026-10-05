@@ -19,7 +19,7 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 
 from custom_components.natural_shutter.const import BUFFER, TARGET
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, advance_time, set_setting, setting_entity_id
 
 
 @pytest.fixture
@@ -64,18 +64,51 @@ async def test_recorder_stores_setting_transitions(hass, cover, add_shutter):
     assert cover.commands == []
 
 
-@pytest.mark.parametrize("suppressed", [True, False])
+async def test_recorder_stores_passive_final_positions(hass, cover, add_shutter):
+    """Persist automatic final-position transitions in history without cover commands."""
+    recorder = get_instance(hass)
+    start = dt_util.utcnow() - timedelta(seconds=1)
+    entry = await add_shutter(cover)
+    cover.report(40)
+    await hass.async_block_till_done()
+    await advance_time(hass, 11)
+    cover.report(30, motion="closing")
+    await hass.async_block_till_done()
+    cover.report(20)
+    await hass.async_block_till_done()
+    await advance_time(hass, 3)
+    await async_wait_recording_done(hass)
+    target_id = setting_entity_id(hass, entry, "sensor", TARGET)
+    states = await recorder.async_add_executor_job(
+        partial(
+            history.get_significant_states,
+            hass,
+            start,
+            entity_ids=[target_id],
+            significant_changes_only=False,
+        )
+    )
+    assert [state.state for state in states[target_id]] == ["30", "60", "80"]
+    assert cover.commands == []
+
+
+@pytest.mark.parametrize("decision", ["suppressed", "command", "external"])
 async def test_decisions_are_in_entity_and_device_activity(
-    hass, cover, add_shutter, suppressed
+    hass, cover, add_shutter, decision
 ):
-    """Retrieve command and suppression snapshots through real Activity filters."""
+    """Retrieve commands, suppression, and external alignment through Activity filters."""
     hass.data["logbook"] = LogbookConfig({}, None, None)
     recorder = get_instance(hass)
     start = dt_util.utcnow() - timedelta(seconds=1)
     entry = await add_shutter(cover)
-    buffer = 100 if suppressed else 10
-    await set_setting(hass, entry, BUFFER, buffer)
-    await set_setting(hass, entry, TARGET, 70)
+    buffer = 100 if decision == "suppressed" else 10
+    if decision == "external":
+        cover.report(40)
+        await hass.async_block_till_done()
+        await advance_time(hass, 11)
+    else:
+        await set_setting(hass, entry, BUFFER, buffer)
+        await set_setting(hass, entry, TARGET, 70)
     await async_wait_recording_done(hass)
     target_id = setting_entity_id(hass, entry, "number", TARGET)
     device = dr.async_get(hass).async_get_device_by_identifier(
@@ -101,9 +134,14 @@ async def test_decisions_are_in_entity_and_device_activity(
         assert messages[0]["domain"] == "natural_shutter"
         reason = (
             "Difference below buffer"
-            if suppressed
+            if decision == "suppressed"
             else "Position command sent to source cover"
+            if decision == "command"
+            else "Target updated after an external position change"
         )
         assert reason in messages[0]["message"]
-        assert f"difference 40 pp, buffer {buffer} pp" in messages[0]["message"]
-    assert cover.commands == ([] if suppressed else [30])
+        if decision == "external":
+            assert "Target 30 → 60 %, actual 60 % (HA 40 %)" in messages[0]["message"]
+        else:
+            assert f"difference 40 pp, buffer {buffer} pp" in messages[0]["message"]
+    assert cover.commands == ([30] if decision == "command" else [])

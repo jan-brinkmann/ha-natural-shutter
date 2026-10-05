@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE
-from homeassistant.const import EVENT_LOGBOOK_ENTRY
 from homeassistant.core import Context
 from homeassistant.data_entry_flow import InvalidData
 from homeassistant.exceptions import HomeAssistantError
@@ -19,35 +18,7 @@ from custom_components.natural_shutter.const import (
     TARGET,
 )
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
-
-
-@pytest.fixture
-def activity_events(hass):
-    """Collect real Activity events and detach the observer after the test."""
-    events = []
-    remove = hass.bus.async_listen(EVENT_LOGBOOK_ENTRY, events.append)
-    yield events
-    remove()
-
-
-@pytest.fixture
-def phone(hass):
-    """Register a simulated Companion App service without sending real messages."""
-    receive = AsyncMock()
-    hass.services.async_register("notify", "mobile_app_test_phone", receive)
-    return receive
-
-
-async def select_phone(hass, entry, service="mobile_app_test_phone"):
-    """Configure a notifier through HA's actual Options Flow without reload."""
-    form = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        form["flow_id"], {CONF_NOTIFICATION_SERVICE: service}
-    )
-    await hass.async_block_till_done()
-    assert result["type"] == "create_entry"
-    assert entry.options[CONF_NOTIFICATION_SERVICE] == service
+from .conftest import SimulatedCover, select_phone, set_setting, setting_entity_id
 
 
 @pytest.mark.parametrize("language", ["de", "en"])
@@ -368,7 +339,7 @@ async def test_excluded_events_do_not_create_diagnostics(
 async def test_action_errors_do_not_log_success_or_notify(
     hass, cover, add_shutter, phone, activity_events, failure
 ):
-    """Keep source validation and command failures outside decision Activity."""
+    """Keep validation of accepted writes and command failures outside Activity."""
     entry = await add_shutter(cover)
     await select_phone(hass, entry)
     if failure == "invalid_position":
@@ -376,7 +347,7 @@ async def test_action_errors_do_not_log_success_or_notify(
     else:
         cover.fail = True
     with pytest.raises(HomeAssistantError):
-        await set_setting(hass, entry, TARGET, 70)
+        await entry.runtime_data.async_set_value(TARGET, 70)
     assert activity_events == []
     phone.assert_not_called()
 

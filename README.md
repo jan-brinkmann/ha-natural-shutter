@@ -20,22 +20,25 @@ Shelly, and other integrations.
 - Add each shutter manually in Home Assistant; nothing is discovered automatically.
 - Two independent sliders per shutter: **Target position** and **Buffer**.
 - Two numeric history sensors: **Target position history** and **Buffer history**.
-- On startup and reload, the target adopts the actual position without movement;
-  the buffer is retained.
+- On startup, reload, and after reported movement, the target adopts the actual
+  position without sending a command; the buffer is retained.
 - German and English setup, entity names, and action error messages.
 - Existing cover entities and their manufacturer integrations remain in use.
-- Target slider availability follows the source cover; reconnection causes no movement.
+- The target slider requires a known live source position; reconnection causes no movement.
 - All added shutters appear under **Natural Shutter** in the **Integrations** tab.
 - Reciprocal **Linked devices** navigation between each virtual device and its actuator.
-- Activity entries for sent position commands and targets suppressed by the
-  position/buffer rule; optional phone notifications for suppressed movement.
+- Activity entries for sent position commands, targets suppressed by the
+  position/buffer rule, and target updates after external position changes;
+  optional phone notifications for suppressed movement.
 
 ## Target position and buffer
 
-**Target position:** 0% means fully open, 100% fully closed. It records your last
-setting between integration loads. A wall switch, manufacturer app, Alexa, the
-original HA cover, or another automation can move the shutter without changing this
-saved target until the next load.
+**Target position:** 0% means fully open, 100% fully closed. It records your setting
+until the source reports a changed position after movement. This includes movement
+from a wall switch, manufacturer app, Alexa, the original HA cover, another
+automation, or Natural Shutter itself. Once movement has stopped, the target adopts
+the equivalent final position. During reported movement, it keeps your setting.
+A target suppressed by the buffer stays saved while the actual position is unchanged.
 
 **Buffer:** the minimum difference in **percentage points** between the actual
 position and the requested position. Movement occurs only when you explicitly
@@ -101,8 +104,9 @@ without releases, HACS downloads the repository's default branch.
 
 Download available updates through HACS and fully restart Home Assistant. For a
 manual installation, replace the integration folder with the updated copy and
-restart. Existing entries can be retained: at load, the target adopts the current
-source position without movement and the saved buffer is retained.
+restart. Existing entries can be retained: at load, an idle target adopts the current
+source position without movement and the saved buffer is retained. If the source
+reports movement, alignment waits for it to stop.
 
 ## Setup and daily use
 
@@ -125,14 +129,16 @@ For a cover represented as a child channel device, the link opens its parent
 actuator: HA's **Linked devices** list supports main devices.
 
 The initial buffer is **0%**. Each time the integration loads, including startup and
-reload, the target is set to **100 minus the source cover's current HA position**,
-rounded to whole percentages. This is saved without sending a movement command,
+reload, an idle target is set to **100 minus the source cover's current HA position**,
+rounded to whole percentages. If the source reports opening or closing, the saved
+target is retained until the movement ends. Alignment sends no movement command,
 regardless of the buffer. The saved buffer is retained.
 
 If no valid live position is available at load, the saved target is retained. A new
-mapping uses the position captured during selection as a fallback, or 0% if that
-position was also unavailable. Later position reports and reconnections do not change
-the target; another load or an explicit slider change is required.
+mapping uses the position captured during selection as an internal fallback, or 0%
+if that position was also unavailable. The target slider is unavailable until a
+valid live position returns; the history sensor keeps the stored value. A newly
+known or changed position is aligned after the waiting period described below.
 
 Adjust the sliders on the device page or a standard dashboard card. Automations
 can use `number.set_value` on the target slider. Find your exact entity IDs on the
@@ -148,8 +154,40 @@ data:
 
 Use **Reconfigure** on an entry's menu to rename it or explicitly replace a missing
 source. Reconfiguration reloads the entry: the buffer is retained and the target
-adopts the current source position if valid, without movement. Target and buffer
-remain adjustable directly through their sliders.
+adopts the current source position if valid and idle, without movement. Target and
+buffer remain adjustable directly through their sliders.
+
+### Follow the actual position
+
+After a cover reports **opening** or **closing**, Natural Shutter waits until it
+stops, then allows **two seconds** for late final position reports. A changed final
+position restarts this waiting period. It saves the equivalent target and updates
+the target history sensor without another command or phone notification. If an
+external position change updates the saved target, a **Target updated** Activity
+entry records the old and new target, actual position on both scales, source, and
+local timestamp. Own movement feedback creates no additional entry. The buffer
+is unchanged.
+
+For sources without movement status, alignment uses **ten seconds** without a
+position change. Under **Configure**, each shutter has a **Quiet interval without
+movement status** option from 1 to 300 seconds. Choose an interval longer than the
+gaps between your actuator's position reports. Without movement status, a reporting
+pause cannot reliably distinguish a stopped shutter from a moving one.
+
+A changed target entered explicitly cancels older pending alignment. Subsequent
+actual position changes can still update it after movement ends. Unknown or
+unavailable positions cancel pending timers and make the target slider unavailable.
+Each mapping tracks its own movement and waiting period.
+
+Movement attribution uses the source's HA context and a remembered own command.
+Without origin information, feedback within the recent command's travel range
+and direction is attributed to it. This record expires after five minutes or is
+cleared after alignment or a reported stop whose grace period brings no position
+change. A different
+user/automation context, reversed motion, or position outside the travel range
+identifies an external change. The record survives an entry reload during movement,
+but not an HA restart. A manual intervention during an own journey that follows
+the same path without origin information cannot be distinguished reliably.
 
 ### Understand position decisions
 
@@ -161,8 +199,8 @@ from **Already at the requested position**. The new target remains saved.
 When the integration issues a position command, it also creates a **Position command
 sent** entry after `cover.set_cover_position` returns successfully. This entry
 contains the same values, using the actual position before dispatch. It never
-sends a phone notification. It confirms the successful action call; physical travel
-and reaching the target position remain unmonitored.
+sends a phone notification. It confirms the successful action call. Later source
+reports update the saved target; this entry does not confirm physical arrival.
 
 To receive suppressed-movement messages on your phone, open **Settings → Devices & services →
 Natural Shutter → Configure** for the desired shutter entry. Select the phone's
@@ -175,7 +213,7 @@ Push is disabled initially and can be enabled, switched, or disabled independent
 for each shutter. Changes apply immediately without reload, position alignment,
 or movement. Activity entries are also created when push is disabled.
 
-Activity entries and suppression messages contain the date and time in HA's configured time zone, including
+Command/suppression entries and suppression messages contain the date and time in HA's configured time zone, including
 the UTC offset, shutter name and source entity ID, previous and new targets,
 actual position on both scales, HA target, difference, and buffer in percentage
 points (`pp`). Messages follow HA's configured language (German or English,
@@ -192,9 +230,11 @@ Target 30 → 70 %, actual 65 % (HA 35 %), HA target 30 %, difference 5 pp, buff
 A difference equal to the buffer still sends a command and creates a **Position
 command sent** entry. Setting the same normalized target, buffer changes, external
 movement, startup, and reload create no position-decision entries or phone messages.
-Unavailable sources, invalid
-positions, and failed cover actions retain their existing action errors and log
-messages. Later physical movement or position feedback is not monitored.
+Unavailable sources and invalid positions make the target slider unavailable.
+If source data becomes invalid during an accepted write, or a cover action fails,
+the existing action errors and log messages apply. Later source feedback only
+aligns the saved target; external target changes create the separate **Target
+updated** entry described above. An unchanged rounded target creates no such entry.
 
 Viewing these entries requires HA **Activity/Logbook** and **Recorder**; their filters
 and retention also apply to these entries. A standard dashboard can display them
@@ -209,11 +249,12 @@ See [standard dashboard examples](examples/dashboard.yaml),
 
 - Installation, startup, reload, restoring values, reconnection, external movement,
   sensor updates, buffer changes, and setting the same normalized target cause no
-  movement. There is no automatic correction of a saved target.
+  movement. There is no automatic movement toward a saved target.
 - The target slider is unavailable when its source is missing, unknown, unavailable,
-  disabled, or only a restored placeholder. Offline target actions are skipped by HA
-  without saving a new value. Once the source returns, the saved target reappears
-  without movement or alignment. The buffer and history sensors remain available.
+  disabled, restored, or has no valid position from 0 to 100. Offline target actions
+  are skipped by HA without saving a new value. Once valid data returns, the saved
+  target reappears; changed or newly known positions are aligned after the waiting
+  period without movement. The buffer and history sensors remain available.
 - If the source loses availability while an accepted target write is being saved,
   or has an invalid actual position, the new target remains saved and the skipped
   action is reported in the UI/action trace and HA logs. Nothing is queued. A failed
@@ -221,9 +262,10 @@ See [standard dashboard examples](examples/dashboard.yaml),
   again, explicitly select a different target when the source is available.
 - A source with a stable registry identity can be renamed. Sources without that
   identity require manual reconfiguration after an Entity-ID rename.
-- The two history sensors track settings, including targets that did not cause
-  movement. History availability and retention depend on your **Recorder** settings
-  and filters; no independent archive or long-term statistics are created.
+- The two history sensors track settings and passive position alignment, including
+  targets that did not cause movement. History availability and retention depend
+  on your **Recorder** settings and filters; no independent archive or long-term
+  statistics are created.
 - Calibration, travel direction, movement progress, and device communication remain
   responsibilities of the source integration. No real hardware tests have been run.
 

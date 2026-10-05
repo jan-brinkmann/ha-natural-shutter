@@ -11,10 +11,11 @@ card, or historical database. The integration has no third-party runtime package
 | Component | Responsibility |
 | --- | --- |
 | `const.py` | Shared product name, domain, keys, platforms, storage key |
-| `config_flow.py` | Manual source validation, duplicate checks, initial snapshot, reconfiguration, notification options |
+| `config_flow.py` | Manual source validation, duplicate checks, initial snapshot, reconfiguration, notification and quiet-interval options |
 | `source.py` | Registry identity resolution and finite percentage validation |
-| `controller.py` | Persistent settings, load-time alignment, source availability, serialized explicit commands |
-| `activity.py` | Localized command/suppression snapshots for HA Activity, with optional suppression notifications |
+| `controller.py` | Persistent settings, passive alignment, source availability, serialized explicit commands |
+| `position.py` | Per-source movement tracking, quiet intervals, and cancellation of stale alignment callbacks |
+| `activity.py` | Localized command, suppression, and external-alignment Activity, with optional suppression notifications |
 | `device.py` | Reciprocal actuator links maintained only on the owned virtual device |
 | `entity.py` | Stable entity IDs, virtual device grouping, subscription cleanup |
 | `number.py` | Target and buffer sliders; explicit `async_set_native_value` |
@@ -25,7 +26,8 @@ Config-entry data contains `source_entity_id`, optional `source_registry_id`, an
 `initial_target`. The entry title is the user-selected label or source friendly
 name. A `ShutterController` is assigned to typed `ConfigEntry.runtime_data`.
 The current settings are an integer dictionary: `target_position` and `buffer`.
-Config-entry options hold `notification_service`: a registered `mobile_app_*`
+Config-entry options hold `position_quiet_seconds` (1–300, default 10) for sources
+without movement status and `notification_service`: a registered `mobile_app_*`
 service in the `notify` domain, or an empty string for disabled push. Existing
 entries without this option default to disabled push. An Options Flow lists only
 Companion App services and allows opt-out even when a saved service has disappeared.
@@ -50,19 +52,20 @@ Sources are never added automatically.
 
 Loading and every explicit target write resolve the registry ID again. Renaming a
 registered source therefore preserves routing and generated entity identities,
-including when the mapping was unloaded during the rename. A rename event keeps
-settings unchanged; loading aligns the target with the source's live position.
+including when the mapping was unloaded during the rename. A rename preserves
+pending position alignment; loading aligns an idle target with the live position.
 A registry listener updates the cached source entity ID, logs removal, and rebinds
-the source state subscription after a rename. Source state events only publish
-target availability transitions; they never change settings or send an action.
+the source state subscription after a rename. Source state events publish target
+availability transitions and schedule passive target alignment after movement.
+They never dispatch an action.
 
 If a pinned registry record disappears, resolution returns no source. It never
 falls back to an entity ID that another device could reuse. The user can explicitly
 rebind the mapping through **Reconfigure**, preserving the buffer and generated
 entity identities. Its reload aligns the target with the replacement's live position
-if valid, retaining the saved target otherwise. A source without a registry identity
-can only be tracked by its
-entity ID; after a rename it needs manual reconfiguration. Such an ID can be reused
+if valid and idle, retaining the saved target otherwise. A source without a registry
+identity can only be tracked by its entity ID; after a rename it needs manual
+reconfiguration. Such an ID can be reused
 by HA, which is an unavoidable identity limitation for unregistered sources.
 
 Generated unique IDs combine the mapping's immutable `entry_id`, platform kind,
@@ -107,14 +110,15 @@ The config flow snapshots an initial fallback target: the rounded value of
 at zero. A missing settings file initializes from this snapshot.
 
 On every entry load, including startup, reload, and reconfiguration, the controller
-reads the resolved source's current position. A valid live value replaces the target
+reads the resolved source's current position. A valid idle value replaces the target
 with the rounded value of `100 - current_position`; the buffer is retained. If the
 source is missing, unknown, unavailable, restored, or has an invalid position, the
 saved target or initial fallback remains. Resulting settings are saved before
 activation when new or changed. This initialization calls neither the target setter
-nor command dispatch, so the buffer cannot trigger or prevent it. Later cover
-reports and reconnections cannot overwrite either value. There is no deferred
-alignment if the source becomes ready after the entry loads.
+nor command dispatch, so the buffer cannot trigger or prevent it. If the source
+reports opening or closing, the saved target remains until movement stops. Later
+position reports can align the target as described below; the buffer is never
+changed by source feedback.
 
 Writes await `Store.async_save` before updating in-memory values, notifying entities,
 or evaluating a target command. Loading calls no setter. Reload recreates the
@@ -123,6 +127,62 @@ alignment above. Entry removal deletes only that file;
 unloading retains it. HA manages disk error logging inside `Store`; durability still
 depends on a functioning storage device and HA's storage lifecycle. No filesystem
 transaction can also guarantee execution on an external physical device.
+
+## Passive position alignment
+
+`ShutterPositionTracker` observes the resolved source's live position and motion
+state independently for each entry. A changed actual position marks alignment as
+pending. While the source reports `opening` or `closing`, no timer may align the
+target. At stop, a two-second grace period accepts late final positions; a changed
+position restarts that period. A load during reported movement also schedules
+alignment after stop, retaining the saved target throughout the movement.
+
+Sources without motion states use a quiet interval, default ten seconds and
+configurable per entry from 1 to 300 seconds. It restarts only for a changed
+position, not unrelated attributes or repeated positions. This heuristic requires
+an interval longer than the source's reporting gaps; position reports alone cannot
+prove that movement has stopped. Source integrations own the correctness of both
+positions and motion states.
+
+Timers use HA's `async_call_later` and the event loop's monotonic clock. Each new
+position, movement, unavailable source, explicit changed target, or teardown
+invalidates older callbacks with a revision counter. Queued state events contribute
+motion evidence, while their position is read from the latest live state to avoid
+overwriting a newer explicit input with an old event. Source entity-ID rebinding
+preserves pending movement evidence. Missing or invalid positions cancel timers
+but retain unfinished movement for recovery.
+
+Alignment acquires the same lock as explicit writes, checks the revision, live
+position, availability, and idle state, then saves the rounded equivalent target.
+The checks run again after persistence; invalidated writes restore the previous
+storage snapshot rather than publishing a stale value. Save failures log an error
+and retain the previous in-memory target; later changed feedback may try again.
+Successful changes notify the target number and history sensor. External movement
+also produces one localized target-alignment Activity entry, after persistence and
+publication. Own movement feedback and unchanged rounded targets produce no such
+entry. Alignment does not call the target setter, evaluate the buffer, dispatch
+commands, report movement decisions, or send phone notifications. An unchanged
+actual position cannot erase a target suppressed by the buffer.
+
+Before dispatching a cover command, the tracker stores a `PositionCommand` with
+source identity, action context, start position, requested HA position, and a
+five-minute monotonic deadline. Suppressed writes create no command marker; failed
+dispatch clears it. Source feedback carrying the same context or its direct child
+belongs to the command. A different user/parent context, opposite movement state,
+or position outside the commanded travel range (with one percentage point of
+tolerance) clears the marker and identifies external movement. Reports without
+origin metadata are attributed to an unexpired command within its range and
+direction. The external Activity event preserves the context of the final report.
+
+Command markers are scoped to entry IDs in transient `hass.data`, allowing a reload
+during movement to preserve attribution. An idle load, completed alignment, or
+reported stop without position changes through its grace period clears the marker.
+A source identity change
+or expired marker cannot suppress later external entries. Entry removal deletes
+its marker; HA restart clears the in-memory cache. This provides bounded attribution,
+not proof of causality: a same-path manual intervention without distinct origin
+metadata during an own movement remains indistinguishable. No physical movement
+is inferred from a successful action alone.
 
 ## Allowed trigger and excluded events
 
@@ -134,9 +194,10 @@ Equal normalized values return without a save, notification, or command.
 The buffer setter only saves and publishes its setting. Sensors only read stored
 values. Setup, reconfiguration, unload, restart, restoration, registry events,
 availability changes, actual position reports, external movements, and sensor
-updates have no path to command dispatch. There is no movement timer, retry queue, feedback
-controller, or pending target replay. Scenes that explicitly write the target are
-subject to the same equality check and validation as any other explicit action.
+updates have no path to command dispatch. Passive alignment timers save settings
+and log external target changes. There is no command retry queue or pending target replay. Scenes that
+explicitly write the target are subject to the same equality check and validation
+as any other explicit action.
 
 ## Conversion and buffer algorithm
 
@@ -152,7 +213,7 @@ Send one `cover.set_cover_position` action with `position: t` iff
 destination. Both directions, equality at the threshold, and endpoints follow this
 same rule. The target is saved even when the buffer suppresses movement.
 
-## Position-decision Activity and suppression notifications
+## Activity and suppression notifications
 
 Only an accepted changed normalized target with valid source data reaches reporting.
 The existing `d == 0 or d < b` branch produces one localized Activity entry, with
@@ -165,8 +226,17 @@ entry's timestamp is recorded after the successful action return. The entry
 confirms service-call success, without asserting physical movement or target arrival.
 Equal normalized writes, buffer changes, setup,
 reload, source feedback, source validation errors, and cover-action failures do not
-produce these diagnostics. Physical movement and later position feedback are not
-monitored. No command, target adjustment, or retry is added by reporting.
+produce these diagnostics. Later feedback can align the saved target without
+creating a decision entry or confirming physical arrival. Reporting adds no
+command, target adjustment, or retry.
+
+An external passive alignment that changes the saved target emits a **Target
+updated** entry. It contains the previous/new target, final actual position on both
+scales, source, and local timestamp, and explains that Natural Shutter sent no
+command for this change. It uses the same target-number association for entity and
+virtual-device Activity filters. There is no phone-notification path in this reporter.
+Load-time alignment, unavailable or invalid positions, failed or invalidated saves,
+and unchanged rounded targets emit no alignment entry.
 
 The snapshot includes the entry name, resolved source entity ID, previous and new
 saved target, actual position in Natural Shutter and HA scales, HA target, distance,
@@ -193,12 +263,14 @@ messages are neither queued nor retried.
 ## Availability and error handling
 
 The target number's `available` property follows the resolved source's live state
-and registry status. A missing, unknown, unavailable, restored, or disabled source
-makes the target unavailable. HA skips actions targeting this unavailable number,
+and registry status. A missing, unknown, unavailable, restored, or disabled source,
+or one without a finite position from 0 to 100, makes the target unavailable.
+HA skips actions targeting this unavailable number,
 leaving its saved value unchanged. The buffer and both history sensors remain
-available. Reconnection republishes the saved target without alignment or movement.
-Invalid numeric positions and lost position support on an otherwise live source
-are handled when an explicit target write is dispatched.
+available. Reconnection republishes the saved target without movement; changed,
+newly known, or unfinished positions can then align after the waiting period.
+Lost position support on an otherwise live source is handled when an explicit
+target write is dispatched.
 
 An accepted changed target is saved first. If the source disappears during saving,
 has an invalid actual position, becomes disabled, or loses position support, the
@@ -216,9 +288,10 @@ between validation and dispatch; its integration determines the resulting error.
 
 ## Concurrency and teardown
 
-One `asyncio.Lock` per mapping covers comparison, saving, publishing, source
-validation, the blocking cover action, and decision reporting. Requests are processed in lock acquisition
-order. An older command cannot overtake a newer one. Buffer changes join the same
+One `asyncio.Lock` per mapping covers passive alignment, comparison, saving,
+publishing, source validation, the blocking cover action, and decision reporting.
+Requests are processed in lock acquisition order. An older command cannot overtake
+a newer one. Buffer changes join the same
 sequence, giving each target decision a consistent saved buffer. Different mappings
 operate independently. Ordered writes are not debounced: each distinct explicit
 target may dispatch its own command. A slow source action delays later writes for
@@ -227,7 +300,8 @@ notification service before subsequent writes proceed.
 
 Unload removes entity subscriptions, marks the controller inactive, detaches entity
 registry, device registry, and source state tracking, and waits for an already running write. Late registry or
-state callbacks cannot reattach tracking or publish updates. A save completing after the inactive
+state callbacks cannot reattach tracking or publish updates. Unload cancels alignment
+timers and invalidates in-flight passive saves. A save completing after the inactive
 flag is set cannot dispatch a command. Already dispatched actions and physical travel
 cannot be withdrawn. Waiting writes fail on the unloaded controller. Setup failure
 also detaches all listeners. Subscription counts and teardown are tested explicitly.
@@ -237,7 +311,8 @@ also detaches all listeners. Subscription counts and teardown are tested explici
 Sensors report the saved integer percentages, including suppressed or failed targets.
 Each changed setting immediately notifies its corresponding slider and sensor.
 Setting the same normalized value sends no notification. The target sensor reflects
-the value aligned at load; later source state events do not change its numeric value.
+the value aligned at load and after subsequent stopped movement. While the target
+number is unavailable, its history sensor keeps the last stored numeric value.
 Sensors carry `%` and suggested display precision zero.
 They intentionally have no statistics state class: charting settings through ordinary
 Recorder history preserves transitions without presenting hourly averages as an
@@ -299,6 +374,17 @@ References checked for suppression reporting on 2026-10-05:
   passes the device's entity IDs together with its device ID to the Activity card;
   the Recorder test uses that same combination and HA's entity filtering.
 
+References checked for passive alignment on 2026-10-05:
+
+- [Cover states and current position](https://developers.home-assistant.io/docs/core/entity/cover/)
+  and [state event and timer helpers](https://developers.home-assistant.io/docs/integration_listen_events/).
+- The installed HA 2026.9.4 timer implementation was inspected to confirm monotonic
+  scheduling and cancellation behavior.
+- [HA context](https://data.home-assistant.io/docs/context/) and the installed
+  entity/service implementation were checked for action attribution. HA's default
+  entity context expires after five seconds, so it alone cannot identify an entire
+  physical journey.
+
 ## Test strategy and known limits
 
 The test suite loads the real integration, config flows, number/sensor platforms,
@@ -331,6 +417,15 @@ Activity queries against isolated SQLite. Successful commands are checked for
 localized snapshots, context and rename association, no phone notification, and
 logging only after service success, retaining the actual position before dispatch.
 No phone receives real messages in tests.
+
+Position tests advance HA timers to exercise reported movement, late final values,
+fallback quiet intervals, explicit target precedence, reload during movement,
+availability loss, stale callbacks, rename, unload, independent entries, and
+persistence failures or source changes during saving. Recorder queries verify
+passive alignment in sensor history and its external Activity entries through
+entity and virtual-device filters. Attribution tests cover own feedback with motion
+states, quiet intervals, child or absent origin contexts, reload during movement,
+external interruptions, expired/failed commands, mapping isolation, and removal.
 
 See [Testing](docs/TESTING.md) for commands and
 [Repository and HACS maintenance](docs/PUBLISHING.md) for distribution details.

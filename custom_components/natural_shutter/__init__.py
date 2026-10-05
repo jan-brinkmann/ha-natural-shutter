@@ -7,7 +7,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, MIN_HA_VERSION, PLATFORMS, STORAGE_VERSION, storage_key
+from .const import (
+    DATA_POSITION_COMMANDS,
+    DOMAIN,
+    MIN_HA_VERSION,
+    PLATFORMS,
+    STORAGE_VERSION,
+    storage_key,
+)
 from .controller import ShutterController
 
 type NaturalShutterConfigEntry = ConfigEntry[ShutterController]
@@ -50,5 +57,6 @@ async def async_unload_entry(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Delete only this mapping's settings after the user removes its entry."""
+    """Delete this mapping's settings and transient command origin on removal."""
+    hass.data.get(DATA_POSITION_COMMANDS, {}).pop(entry.entry_id, None)
     await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()

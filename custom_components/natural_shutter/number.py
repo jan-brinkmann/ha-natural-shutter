@@ -39,12 +39,12 @@ class ShutterNumber(NaturalShutterEntity, NumberEntity):
 
     @property
     def available(self) -> bool:
-        """Keep the buffer available and expose the target only with a live source."""
+        """Keep the buffer available; require a known live position for the target."""
         return self.key == BUFFER or self.controller.source_available
 
     @property
     def native_value(self) -> int:
-        """Return the stored setting, never the cover's actual position."""
+        """Return the saved setting, including passive alignment after stopped motion."""
         return self.controller.values[self.key]
 
     async def async_set_native_value(self, value: float) -> None:

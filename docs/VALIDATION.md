@@ -1,6 +1,6 @@
 # Executed validation
 
-Validated locally on **2026-10-04**. No physical devices, production HA instance,
+Validated locally on **2026-10-04** and **2026-10-05**. No physical devices, production HA instance,
 Git metadata, or GitHub state were changed.
 
 The owner has since created
@@ -434,6 +434,113 @@ Final checks for this follow-up:
 The latest pytest output is at `/tmp/natural-shutter-full-tests.log`. Source changes
 and generated test artifacts remain local and unstaged. The integration version
 remains `1.0.0`; no Git metadata or GitHub state was changed.
+
+## Passive target alignment after movement
+
+On 2026-10-05, target alignment was extended to reported position changes after
+movement. Opening/closing states hold the target until stop, followed by a
+two-second grace period for final reports. Sources without movement status use a
+ten-second quiet interval, configurable per mapping from 1 to 300 seconds. Loading
+a moving source now retains its saved target until stop. Explicit changed targets
+cancel older pending alignment. Buffer values remain unchanged.
+
+Missing, unavailable, restored, disabled, or invalid-position sources make the
+target number unavailable. Its history sensor keeps the stored value. Recovery can
+align a changed or newly known position, or complete pending movement alignment,
+without a command, position-decision Activity entry, or phone notification.
+
+Tests cover both movement directions, intermediate and late final positions,
+quiet intervals, rapid queued events, explicit input precedence, reload during
+movement, outages, renaming, source removal, unload, independent mappings, invalid
+options, storage failures, and source changes during passive persistence. A real
+SQLite Recorder test verifies passive target transitions in sensor history.
+
+Changed files:
+
+- Runtime: `custom_components/natural_shutter/position.py` (new), `controller.py`,
+  `number.py`, `const.py`, and `config_flow.py`.
+- Translations: `custom_components/natural_shutter/strings.json`,
+  `translations/en.json`, and `translations/de.json`.
+- Tests: `tests/test_position.py` (new), `conftest.py`, `test_activity.py`,
+  `test_commands.py`, `test_entities.py`, `test_examples.py`, `test_lifecycle.py`,
+  and `test_recorder.py`.
+- Documentation: `README.md`, `README.de.md`, `ARCHITECTURE.md`, `docs/TESTING.md`,
+  and `docs/VALIDATION.md`.
+
+Executed checks:
+
+| Executed command | Result |
+| --- | --- |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q --cov --cov-report=term-missing --tb=short --show-capture=no --timeout=30` | **193 passed**, 12.45 seconds; **99%** integration coverage (570 statements, 130 branches) |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff check .` | Passed |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .` | Passed; 31 Python files formatted |
+| `python3 scripts/validate_project.py` | Fails on the existing manifest/changelog mismatch: manifest `1.1.0` has no matching changelog heading |
+| `python3 /tmp/natural-shutter-validate-remainder.py` | Passed all other packaging, JSON, translation, placeholder, and docstring checks; skips only that existing assertion in memory |
+| `PYTHONPYCACHEPREFIX=/tmp/natural-shutter-position-compile-cache python3 -m compileall -q custom_components tests scripts` | Passed |
+| `git diff --check` | Passed |
+
+The sandbox initially blocked writes to asyncio's internal socket, causing tests
+to stall. The complete suite passed outside the sandbox after explicit approval;
+no real services or devices were contacted. Output is saved at
+`/tmp/natural-shutter-position-tests.log`. The manifest, changelog, integration
+version, Git metadata, and GitHub state were not changed. All source changes remain
+local and unstaged.
+
+## Activity for externally aligned targets
+
+On 2026-10-05, passive target changes attributed to external movement were given a
+localized **Target updated** Activity entry. It records the old/new target, actual
+position on both scales, source entity ID, and HA-local timestamp after the new
+target is saved and published. The entry follows target-number renames and appears
+in both entity and virtual-device Activity filters. It never sends a phone message
+or cover command. Unchanged rounded targets and failed/invalidated saves create no
+alignment entry.
+
+Own command origin is recorded per mapping before dispatch and retained in memory
+across entry reloads during movement. Source contexts, travel range/direction, and
+a five-minute expiry identify feedback. Completed alignment, removal, failure, or
+a stop whose grace period yields no changed position releases the marker. Late
+first final positions within the grace period still belong to the own command.
+Sources without origin metadata cannot distinguish every manual intervention
+along an ongoing own command's path; the READMEs document this attribution limit.
+
+Files changed in this follow-up:
+
+- Runtime: `custom_components/natural_shutter/activity.py`, `position.py`,
+  `controller.py`, `const.py`, and `__init__.py`.
+- Translations: `custom_components/natural_shutter/strings.json`,
+  `translations/en.json`, and `translations/de.json`.
+- Tests: `tests/test_alignment_activity.py` (new), `conftest.py`,
+  `test_position.py`, and `test_recorder.py`.
+- Documentation: `README.md`, `README.de.md`, `ARCHITECTURE.md`, `docs/TESTING.md`,
+  and `docs/VALIDATION.md`.
+
+Executed checks:
+
+| Executed command | Result |
+| --- | --- |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q --cov --cov-report=term-missing --tb=short --show-capture=no --timeout=30` | **210 passed**, 13.54 seconds; **99%** integration coverage (644 statements, 146 branches) |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff check .` | Passed |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .` | Passed; 32 Python files formatted |
+| `python3 scripts/validate_project.py` | Same pre-existing manifest `1.1.0` / changelog mismatch |
+| `python3 /tmp/natural-shutter-validate-remainder.py` | All other packaging, JSON, translation, placeholder, and docstring checks passed |
+| `PYTHONPYCACHEPREFIX=/tmp/natural-shutter-position-compile-cache python3 -m compileall -q custom_components tests scripts` | Passed |
+| `git diff --check` | Passed |
+
+Tests cover German/English text, fractional positions, HA-local timestamps, target
+renames, source contexts, repeated unchanged rounded targets, own feedback with
+motion/quiet intervals/child or absent origin metadata, reload during movement,
+late first final positions, external user/automation/reverse/out-of-range reports,
+command expiry/failure, independent mappings, removal, and persistence failures.
+The real SQLite Recorder tests retrieve external alignment entries using entity
+and virtual-device Activity filters. Browser rendering and real hardware remain
+untested.
+
+As before, the sandbox blocked asyncio's internal socket; the complete suite passed
+outside it under the existing approval, with simulated services only. Final output
+is at `/tmp/natural-shutter-external-alignment-tests.log`. The integration version
+and changelog remain unchanged. All changes are local and unstaged; no Git metadata
+or GitHub state was changed.
 
 ## Remaining validation limits
 

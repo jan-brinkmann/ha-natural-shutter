@@ -26,11 +26,11 @@ from custom_components.natural_shutter.const import (
 )
 from custom_components.natural_shutter.controller import ShutterController
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, advance_time, set_setting, setting_entity_id
 
 
 async def test_offline_reload_retains_target_without_actions(hass, cover, add_shutter):
-    """Retain the saved target during an offline load and subsequent reconnection."""
+    """Retain an offline target and align a valid reconnected position after settling."""
     entry = await add_shutter(cover)
     await set_setting(hass, entry, BUFFER, 100)
     await set_setting(hass, entry, TARGET, 60)
@@ -51,6 +51,8 @@ async def test_offline_reload_retains_target_without_actions(hass, cover, add_sh
     await hass.async_block_till_done()
     assert entry.runtime_data.values == {TARGET: 60, BUFFER: 100}
     assert hass.states.get(number_id).state == "60"
+    await advance_time(hass, 11)
+    assert entry.runtime_data.values == {TARGET: 95, BUFFER: 100}
     assert cover.commands == []
 
 
@@ -84,6 +86,9 @@ async def test_reload_aligns_target_without_actions(
     cover.report(50)
     await hass.async_block_till_done()
     assert entry.runtime_data.values == values
+    assert cover.commands == []
+    await advance_time(hass, 11)
+    assert entry.runtime_data.values == {TARGET: 50, BUFFER: buffer}
     assert cover.commands == []
 
 

@@ -19,7 +19,7 @@ from custom_components.natural_shutter.source import (
     valid_percentage,
 )
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, advance_time, set_setting, setting_entity_id
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,7 @@ async def test_unchanged_normalized_target(hass, cover, add_shutter):
 
 
 async def test_buffer_and_external_changes_never_recheck(hass, cover, add_shutter):
-    """Buffer and source updates cannot re-evaluate an earlier suppressed target."""
+    """Align changed source positions without replaying an earlier suppressed target."""
     entry = await add_shutter(cover)
     await set_setting(hass, entry, BUFFER, 100)
     await set_setting(hass, entry, TARGET, 70)
@@ -94,6 +94,8 @@ async def test_buffer_and_external_changes_never_recheck(hass, cover, add_shutte
         cover.report(position)
         await hass.async_block_till_done()
         assert entry.runtime_data.values == {TARGET: 70, BUFFER: 0}
+    await advance_time(hass, 11)
+    assert entry.runtime_data.values == {TARGET: 0, BUFFER: 0}
     assert cover.commands == []
 
 
@@ -113,17 +115,20 @@ async def test_invalid_setting(hass, cover, add_shutter, key, value):
 
 @pytest.mark.parametrize("value", [None, "nan", "inf", -1, 101, True, "bad"])
 async def test_invalid_actual_position(hass, cover, add_shutter, value, caplog):
-    """Save the changed target and report an invalid actual position without a move."""
+    """Make an invalid position unavailable and skip target actions without saving."""
     entry = await add_shutter(cover)
     cover.report(value)
-    with pytest.raises(ServiceValidationError) as error:
-        await set_setting(hass, entry, TARGET, 60)
-    assert error.value.translation_key == "invalid_position"
-    assert entry.runtime_data.values[TARGET] == 60
-    assert "No command is queued" in caplog.text
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get(setting_entity_id(hass, entry, "number", TARGET)).state
+        == STATE_UNAVAILABLE
+    )
+    await set_setting(hass, entry, TARGET, 60)
+    assert entry.runtime_data.values[TARGET] == 30
+    assert "not currently available" in caplog.text
     cover.report(70)
     await hass.async_block_till_done()
-    await set_setting(hass, entry, TARGET, 60)
+    await set_setting(hass, entry, TARGET, 30)
     assert cover.commands == []
 
 
