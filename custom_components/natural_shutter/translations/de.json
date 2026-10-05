@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Rollladen hinzufügen",
-        "description": "Wähle eine vorhandene Cover-Entität mit Unterstützung für Positionsbefehle. Bei jedem Laden übernimmt das Ziel eine gültige Istposition ohne Fahrt. Ziel-Position: 0 % vollständig geöffnet, 100 % vollständig geschlossen. Der Puffer ist der Mindestabstand in Prozentpunkten, ab dem eine Zieländerung einen Fahrbefehl sendet. Beide Regler stehen nach der Einrichtung zur Verfügung.",
+        "description": "Wähle eine vorhandene Cover-Entität mit Unterstützung für Positionsbefehle. Beim Laden und nach Fahrten übernimmt das Ziel die entsprechende Istposition ohne Fahrbefehl. Während einer gemeldeten Fahrt bleibt deine Einstellung stehen; ohne bekannte aktuelle Position ist das Ziel nicht verfügbar. Ziel-Position: 0 % vollständig geöffnet, 100 % vollständig geschlossen. Der Puffer ist der Mindestabstand in Prozentpunkten, ab dem eine Zieländerung einen Fahrbefehl sendet. Beide Regler stehen nach der Einrichtung zur Verfügung.",
         "data": {"source_entity_id": "Quell-Rollladen", "name": "Name (optional)"}
       },
       "reconfigure": {
         "title": "Rollladen neu konfigurieren",
-        "description": "Ändere den Namen oder wähle eine Ersatzquelle. Der Puffer bleibt erhalten. Beim erneuten Laden übernimmt das Ziel eine gültige Istposition der Quelle; andernfalls bleibt das gespeicherte Ziel erhalten. Die Neukonfiguration löst keine Fahrt aus. Eine aus der Registry entfernte Quelle muss ausdrücklich erneut ausgewählt werden.",
+        "description": "Ändere den Namen oder wähle eine Ersatzquelle. Der Puffer bleibt erhalten. Beim erneuten Laden übernimmt das Ziel im Stillstand eine gültige aktuelle Quellposition. Während einer gemeldeten Fahrt wartet der Abgleich auf deren Ende; ohne bekannte aktuelle Position ist das Ziel nicht verfügbar. Die Neukonfiguration löst keine Fahrt aus. Eine aus der Registry entfernte Quelle muss ausdrücklich erneut ausgewählt werden.",
         "data": {"source_entity_id": "Quell-Rollladen", "name": "Name (optional)"}
       }
     },
@@ -26,9 +26,9 @@
   "options": {
     "step": {
       "init": {
-        "title": "Benachrichtigungen bei unterdrückter Fahrt",
-        "description": "Wähle ein Handy mit registrierter Home Assistant Companion App oder deaktiviere Push-Nachrichten. Eine durch die Positions-/Pufferregel unterdrückte Zieländerung erzeugt immer einen Aktivitätseintrag. Diese Option gilt sofort, ohne erneutes Laden oder Bewegen des Rollladens.",
-        "data": {"notification_service": "Benachrichtigungsdienst des Handys"}
+        "title": "Benachrichtigungen und Positionsabgleich",
+        "description": "Wähle ein Companion-App-Handy oder deaktiviere Push-Nachrichten. Für Covers ohne Fahrstatus stelle eine Ruhezeit ein, die länger als die Pausen zwischen Positionsmeldungen ist. Danach übernimmt das Ziel die letzte Position, ohne Fahrt oder Benachrichtigung. Covers mit Öffnen-/Schließen-Status verwenden zwei Sekunden nach dem Anhalten. Änderungen gelten ohne erneutes Laden.",
+        "data": {"notification_service": "Benachrichtigungsdienst des Handys", "position_quiet_seconds": "Ruhezeit ohne Fahrstatus (Sekunden)"}
       }
     },
     "error": {
@@ -40,6 +40,8 @@
     "notification_unavailable": "{service} (nicht verfügbar)",
     "movement_suppressed_title": "{name}: Keine Fahrt",
     "movement_command_title": "{name}: Fahrbefehl gesendet",
+    "external_alignment_title": "{name}: Zielwert aktualisiert",
+    "external_alignment_message": "{timestamp} · {source}: Zielwert nach externer Positionsänderung aktualisiert. Ziel {previous_target} → {target} %, Ist {actual} % (HA {position} %). Natural Shutter hat für diese Änderung keinen Fahrbefehl gesendet.",
     "movement_decision_message": "{timestamp} · {source}: {reason}. Ziel {previous_target} → {target} %, Ist {actual} % (HA {position} %), HA-Ziel {ha_target} %, Abstand {distance} pp, Puffer {buffer} pp.",
     "command_sent": "Fahrbefehl an Quell-Rollladen gesendet",
     "already_at_target": "Zielposition bereits erreicht",

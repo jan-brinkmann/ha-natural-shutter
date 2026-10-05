@@ -20,24 +20,26 @@ Positionsbefehlen, beispielsweise aus Homematic IP, Shelly und anderen Integrati
 - Jeden Rollladen manuell über die HA-Oberfläche hinzufügen; keine automatische Aufnahme.
 - Zwei unabhängige Schieberegler pro Rollladen: **Ziel-Position** und **Puffer**.
 - Zwei numerische Verlaufssensoren: **Ziel-Position Verlauf** und **Puffer Verlauf**.
-- Bei Start und Reload übernimmt das Ziel die Istposition ohne Fahrbefehl;
-  der Puffer bleibt erhalten.
+- Bei Start, Reload und nach gemeldeten Fahrten übernimmt das Ziel die Istposition
+  ohne Fahrbefehl; der Puffer bleibt erhalten.
 - Deutsche und englische Einrichtung, Entitätsnamen und Aktionsfehlermeldungen.
 - Vorhandene Cover-Entitäten und Herstellerintegrationen werden weiter verwendet.
-- Die Verfügbarkeit des Zielreglers folgt dem Quell-Cover; Wiederverbindung ohne Fahrt.
+- Der Zielregler benötigt eine bekannte aktuelle Quellposition; Wiederverbindung ohne Fahrt.
 - Alle hinzugefügten Rollläden stehen unter **Natural Shutter** im Reiter **Integrationen**.
 - Gegenseitige Navigation über **Verknüpfte Geräte** zwischen virtuellem Gerät und Aktor.
-- Aktivitätseinträge für gesendete Fahrbefehle und durch die Positions-/Pufferregel
-  unterdrückte Zieländerungen; optional Handy-Meldungen für unterdrückte Fahrten.
+- Aktivitätseinträge für gesendete Fahrbefehle, durch die Positions-/Pufferregel
+  unterdrückte Zieländerungen und Zielabgleiche nach externen Positionsänderungen;
+  optional Handy-Meldungen für unterdrückte Fahrten.
 
 ## Ziel-Position und Puffer
 
 **Ziel-Position:** 0 % bedeutet vollständig geöffnet, 100 % vollständig geschlossen.
-Bis zum nächsten Laden der Integration hält der Wert deine letzte Einstellung fest.
-Bedienungen über Wandtaster,
-Hersteller-App, Alexa, das ursprüngliche HA-Cover oder andere Automationen können
-den Rollladen bewegen, ohne diese gespeicherte Ziel-Position zu ändern. Erst beim
-erneuten Laden erfolgt wieder der Abgleich mit der Istposition.
+Der Wert hält deine Einstellung fest, bis die Quelle nach einer Fahrt eine geänderte
+Position meldet. Das gilt für Fahrten über Wandtaster, Hersteller-App, Alexa, das
+ursprüngliche HA-Cover, andere Automationen und Natural Shutter selbst. Nach
+Fahrtende übernimmt das Ziel die entsprechende Endposition. Während einer gemeldeten
+Fahrt bleibt deine Einstellung stehen. Ein durch den Puffer unterdrücktes Ziel
+bleibt gespeichert, solange sich die Istposition nicht ändert.
 
 **Puffer:** der Mindestabstand in **Prozentpunkten** zwischen Istposition und
 gewünschter Position. Eine Fahrt wird nur ausgelöst, wenn du das Ziel ausdrücklich
@@ -109,8 +111,9 @@ Ohne Releases lädt HACS den Standardbranch des Repositorys herunter.
 Lade verfügbare Updates über HACS herunter und starte Home Assistant vollständig
 neu. Bei manueller Installation ersetzt du den Integrationsordner durch die
 aktualisierte Kopie und startest neu. Bestehende Einträge können erhalten bleiben:
-Beim Laden übernimmt das Ziel die aktuelle Quellposition ohne Fahrt und der
-gespeicherte Puffer bleibt erhalten.
+Beim Laden übernimmt das Ziel im Stillstand die aktuelle Quellposition ohne Fahrt
+und der gespeicherte Puffer bleibt erhalten. Meldet die Quelle eine Fahrt, wartet
+der Abgleich auf deren Ende.
 
 ## Einrichtung und tägliche Verwendung
 
@@ -134,16 +137,18 @@ Bei einem Cover als untergeordnetem Kanalgerät führt der Link zum übergeordne
 Aktor: Die HA-Liste **Verknüpfte Geräte** unterstützt Hauptgeräte.
 
 Der Puffer beginnt bei **0 %**. Bei jedem Laden der Integration, auch bei Start und
-Reload, wird die Ziel-Position auf **100 minus die aktuelle HA-Position des
-Quell-Covers** gesetzt und auf ganze Prozent gerundet. Der Wert wird gespeichert,
-ohne einen Fahrbefehl zu senden, unabhängig vom Puffer. Der gespeicherte Puffer
+Reload, wird die Ziel-Position im Stillstand auf **100 minus die aktuelle
+HA-Position des Quell-Covers** gesetzt und auf ganze Prozent gerundet. Meldet die
+Quelle Öffnen oder Schließen, bleibt das gespeicherte Ziel bis zum Fahrtende stehen.
+Der Abgleich sendet keinen Fahrbefehl, unabhängig vom Puffer. Der gespeicherte Puffer
 bleibt erhalten.
 
 Fehlt beim Laden eine gültige aktuelle Position, bleibt das gespeicherte Ziel
 erhalten. Bei einer neuen Zuordnung dient die bei der Auswahl erfasste Position
-als Ersatzwert, andernfalls 0 %. Spätere Positionsmeldungen und Wiederverbindungen
-ändern das Ziel nicht; dafür ist ein erneutes Laden oder eine ausdrückliche
-Regleränderung erforderlich.
+als interner Ersatzwert, andernfalls 0 %. Der Zielregler bleibt bis zur Rückkehr
+einer gültigen aktuellen Position nicht verfügbar; der Verlaufssensor zeigt den
+gespeicherten Wert. Eine erstmals bekannte oder geänderte Position wird nach der
+unten beschriebenen Wartezeit abgeglichen.
 
 Bediene die Regler auf der Geräteseite oder in einer Standard-Dashboard-Karte.
 Automationen können `number.set_value` für den Zielregler aufrufen. Die genauen
@@ -160,7 +165,42 @@ data:
 Über **Neu konfigurieren** im Menü des Eintrags kannst du den Namen ändern oder
 eine fehlende Quelle ausdrücklich ersetzen. Dabei wird der Eintrag neu geladen:
 Der Puffer bleibt erhalten, das Ziel übernimmt eine gültige aktuelle Quellposition
-ohne Fahrt. Ziel und Puffer stellst du weiterhin direkt über die Regler ein.
+im Stillstand ohne Fahrt. Ziel und Puffer stellst du weiterhin direkt über die Regler ein.
+
+### Istposition nachführen
+
+Meldet das Cover **Öffnen** oder **Schließen**, wartet Natural Shutter auf das
+Fahrtende und anschließend **zwei Sekunden** auf verspätete Endpositionsmeldungen.
+Eine geänderte Endposition startet diese Wartezeit erneut. Danach wird das
+entsprechende Ziel gespeichert und im Verlaufssensor sichtbar. Dabei entstehen
+weder ein weiterer Fahrbefehl noch eine Handy-Benachrichtigung. Ändert eine externe
+Positionsänderung das gespeicherte Ziel, erscheint ein Aktivitätseintrag
+**Zielwert aktualisiert** mit altem und neuem Ziel, Istposition auf beiden Skalen,
+Quelle und lokaler Uhrzeit. Rückmeldungen eigener Fahrten erzeugen keinen
+zusätzlichen Eintrag. Der Puffer bleibt unverändert.
+
+Bei Quellen ohne Fahrstatus erfolgt der Abgleich nach **zehn Sekunden** ohne
+Positionsänderung. Unter **Konfigurieren** lässt sich pro Rollladen die
+**Ruhezeit ohne Fahrstatus** zwischen 1 und 300 Sekunden einstellen. Wähle sie
+länger als die Abstände zwischen den Positionsmeldungen deines Aktors. Ohne
+Fahrstatus lässt sich eine Meldepause nicht sicher von einem Stillstand unterscheiden.
+
+Eine ausdrücklich eingegebene Zieländerung verwirft ältere vorgemerkte Abgleiche.
+Spätere tatsächliche Positionsänderungen können das Ziel nach Fahrtende wieder
+aktualisieren. Unbekannte oder nicht verfügbare Positionen brechen wartende
+Abgleiche ab und machen den Zielregler nicht verfügbar. Jede Instanz verfolgt ihre
+eigene Fahrt und Wartezeit.
+
+Die Zuordnung nutzt den HA-Kontext der Quelle und einen gemerkten eigenen
+Fahrbefehl. Ohne Ursprungsinformation werden Rückmeldungen innerhalb dessen
+Fahrbereich und Richtung dem laufenden eigenen Befehl zugeordnet. Die Zuordnung
+endet nach fünf Minuten, nach dem Abgleich oder nach gemeldetem Stopp, wenn in der
+anschließenden Wartezeit keine Positionsänderung eintrifft. Ein anderer
+Benutzer-/Automationskontext, eine Gegenfahrt oder
+eine Position außerhalb des Fahrbereichs kennzeichnet eine externe Änderung.
+Die Zuordnung bleibt bei einem Reload während der Fahrt erhalten, aber nicht bei
+einem HA-Neustart. Ein manueller Eingriff während einer eigenen Fahrt lässt sich
+ohne Ursprungsinformation nicht sicher erkennen, wenn er demselben Fahrweg folgt.
 
 ### Fahrentscheidungen nachvollziehen
 
@@ -173,8 +213,8 @@ Wenn die Integration einen Fahrbefehl auslöst, erscheint zusätzlich der Eintra
 **Fahrbefehl gesendet**. Er entsteht nach dem erfolgreichen Aufruf von
 `cover.set_cover_position` und enthält dieselben Werte, mit der Istposition vor
 dem Befehl. Dafür wird keine Handy-Benachrichtigung gesendet. Der Eintrag bestätigt
-den erfolgreichen Aktionsaufruf; die tatsächliche Fahrt und das Erreichen der
-Zielposition werden weiterhin nicht überwacht.
+den erfolgreichen Aktionsaufruf. Spätere Quellmeldungen aktualisieren das
+gespeicherte Ziel; dieser Eintrag bestätigt keine physische Ankunft.
 
 Für die Meldung einer unterdrückten Fahrt auf dem Handy öffne **Einstellungen → Geräte & Dienste →
 Natural Shutter → Konfigurieren** beim gewünschten Rollladeneintrag. Wähle unter
@@ -187,7 +227,7 @@ Push-Nachrichten sind zunächst deaktiviert und lassen sich pro Rollladen aktivi
 wechseln oder wieder abschalten. Die Änderung gilt sofort, ohne Reload, Positionsabgleich
 oder Fahrt. Die Aktivitätseinträge entstehen auch bei deaktivierten Push-Nachrichten.
 
-Aktivitätseinträge und Unterdrückungsmeldungen enthalten Datum und Uhrzeit in der HA-Zeitzone einschließlich
+Fahrentscheidungseinträge und Unterdrückungsmeldungen enthalten Datum und Uhrzeit in der HA-Zeitzone einschließlich
 UTC-Offset, Rollladenname und Quell-Entity-ID, den vorherigen und neuen Zielwert,
 die Istposition auf beiden Skalen, das HA-Ziel, den Abstand und den Puffer in
 Prozentpunkten (`pp`). Die Sprache folgt der in HA konfigurierten Sprache
@@ -205,9 +245,12 @@ Bei einem Abstand genau gleich dem Puffer wird wie bisher gefahren und ein
 **Fahrbefehl gesendet**-Eintrag erzeugt. Derselbe normalisierte Zielwert,
 Pufferänderungen, externe Bewegungen, Start und Reload erzeugen keine
 Fahrentscheidungseinträge oder Handy-Meldungen.
-Nicht verfügbare Quellen, ungültige Positionen und fehlgeschlagene Fahrbefehle
-behalten ihre bisherigen Aktions- und Protokollmeldungen. Es wird keine spätere
-physische Fahrt oder Positionsrückmeldung überwacht.
+Nicht verfügbare Quellen und ungültige Positionen machen den Zielregler nicht
+verfügbar. Werden Quelldaten während einer angenommenen Zieländerung ungültig oder
+schlägt ein Fahrbefehl fehl, gelten die bisherigen Aktions- und Protokollmeldungen.
+Spätere Quellmeldungen gleichen nur das gespeicherte Ziel ab. Externe Zieländerungen
+erzeugen den oben beschriebenen separaten Eintrag **Zielwert aktualisiert**.
+Bleibt das gerundete Ziel gleich, entsteht kein solcher Eintrag.
 
 Die Aktivitätsanzeige benötigt HA **Aktivität/Logbook** und **Recorder**; deren
 Filter und Aufbewahrungsdauer gelten auch für diese Einträge. Ein Standard-Dashboard
@@ -226,10 +269,11 @@ Siehe [Standard-Dashboard-Beispiele](examples/dashboard.yaml),
   desselben normalisierten Zielwerts lösen keine Fahrt aus. Es gibt keine
   automatische Nachregelung auf das gespeicherte Ziel.
 - Der Zielregler ist nicht verfügbar, wenn die Quelle fehlt, unbekannt, nicht
-  verfügbar, deaktiviert oder nur als wiederhergestellter Platzhalter vorhanden ist.
+  verfügbar, deaktiviert, wiederhergestellt oder ohne gültige Position von 0 bis 100 ist.
   Ziel-Aktionen werden dann von HA übersprungen, ohne einen neuen Wert zu speichern.
-  Bei Wiederverbindung erscheint das gespeicherte Ziel ohne Fahrt oder erneuten
-  Positionsabgleich. Puffer und Verlaufssensoren bleiben verfügbar.
+  Bei Rückkehr gültiger Daten erscheint das gespeicherte Ziel wieder. Geänderte
+  oder erstmals bekannte Positionen werden nach der Wartezeit ohne Fahrt
+  abgeglichen. Puffer und Verlaufssensoren bleiben verfügbar.
 - Fällt die Quelle während des Speicherns einer bereits angenommenen Zieländerung
   aus oder liefert sie eine ungültige Istposition, bleibt das neue Ziel gespeichert.
   Die übersprungene Aktion wird in Oberfläche/Aktionsverlauf und HA-Protokoll
@@ -239,7 +283,8 @@ Siehe [Standard-Dashboard-Beispiele](examples/dashboard.yaml),
 - Quellen mit stabiler Registry-Identität können umbenannt werden. Ohne diese
   Identität ist nach einer Entity-ID-Umbenennung eine manuelle Neukonfiguration
   erforderlich.
-- Die Verlaufssensoren zeigen Einstellungen, auch bei unterdrückten Fahrten.
+- Die Verlaufssensoren zeigen Einstellungen und passive Positionsabgleiche, auch
+  bei unterdrückten Fahrten.
   Verfügbarkeit und Aufbewahrungsdauer des Verlaufs hängen von **Recorder** und
   dessen Filtern ab. Ein eigenes Archiv oder Langzeitstatistiken werden nicht erstellt.
 - Kalibrierung, Fahrtrichtung, Fahrfortschritt und Gerätekommunikation liegen bei

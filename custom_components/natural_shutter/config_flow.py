@@ -1,4 +1,4 @@
-"""Provide cover selection, safe reconfiguration, and optional phone notifications."""
+"""Provide cover selection, notifications, and position-alignment timing."""
 
 from typing import Any
 
@@ -22,6 +22,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -33,8 +36,10 @@ from homeassistant.helpers.translation import async_get_translations
 from .const import (
     CONF_INITIAL_TARGET,
     CONF_NOTIFICATION_SERVICE,
+    CONF_POSITION_QUIET_SECONDS,
     CONF_SOURCE,
     CONF_SOURCE_REGISTRY_ID,
+    DEFAULT_POSITION_QUIET_SECONDS,
     DOMAIN,
     MOBILE_APP_SERVICE_PREFIX,
 )
@@ -89,7 +94,7 @@ class NaturalShutterConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Offer optional phone notifications without reloading the mapping."""
+        """Offer phone notifications and quiet-time timing without reloading."""
         return NaturalShutterOptionsFlow()
 
     async def async_step_user(
@@ -172,12 +177,12 @@ class NaturalShutterConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class NaturalShutterOptionsFlow(OptionsFlow):
-    """Select one registered Companion App notifier independently of settings."""
+    """Select a phone notifier and fallback quiet time independently per mapping."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Save or disable phone notifications without alignment or movement.
+        """Save notifications and future quiet-time timing without causing movement.
 
         Reject missing or non-mobile notification services. A previously selected
         missing service stays visible so the user can replace or disable it.
@@ -198,6 +203,9 @@ class NaturalShutterOptionsFlow(OptionsFlow):
                     data={
                         **self.config_entry.options,
                         CONF_NOTIFICATION_SERVICE: selected,
+                        CONF_POSITION_QUIET_SECONDS: user_input[
+                            CONF_POSITION_QUIET_SECONDS
+                        ],
                     },
                 )
 
@@ -234,7 +242,21 @@ class NaturalShutterOptionsFlow(OptionsFlow):
                         SelectSelectorConfig(
                             options=choices, mode=SelectSelectorMode.DROPDOWN
                         )
-                    )
+                    ),
+                    vol.Optional(
+                        CONF_POSITION_QUIET_SECONDS,
+                        default=self.config_entry.options.get(
+                            CONF_POSITION_QUIET_SECONDS, DEFAULT_POSITION_QUIET_SECONDS
+                        ),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1,
+                            max=300,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="s",
+                        )
+                    ),
                 }
             ),
             errors=errors,

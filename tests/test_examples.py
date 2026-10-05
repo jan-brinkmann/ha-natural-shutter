@@ -8,7 +8,7 @@ from homeassistant.util.yaml import load_yaml
 
 from custom_components.natural_shutter.const import BUFFER, CONF_SOURCE, DOMAIN, TARGET
 
-from .conftest import set_setting, setting_entity_id
+from .conftest import advance_time, set_setting, setting_entity_id
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -52,6 +52,11 @@ async def test_simulated_cover_example(hass):
             == "70"
         )
         assert hass.states.get(helper_id).state == "15.0"
+        await advance_time(hass, 11)
+        assert (
+            hass.states.get(setting_entity_id(hass, entry, "number", TARGET)).state
+            == "85"
+        )
         assert calls == ["set_cover_position"]
     finally:
         remove()

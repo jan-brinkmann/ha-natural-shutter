@@ -8,7 +8,7 @@ from homeassistant.helpers.translation import async_get_translations
 
 from custom_components.natural_shutter.const import BUFFER, DOMAIN, TARGET, storage_key
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, advance_time, set_setting, setting_entity_id
 
 
 async def test_slider_and_history_contract(hass, cover, add_shutter):
@@ -61,7 +61,7 @@ async def test_slider_and_history_contract(hass, cover, add_shutter):
 async def test_target_availability_follows_source(
     hass, hass_storage, cover, add_shutter, state, attributes
 ):
-    """Skip offline target actions and restore the saved value on reconnection."""
+    """Skip offline actions and align the valid position after reconnection settles."""
     entry = await add_shutter(cover)
     number_id = setting_entity_id(hass, entry, "number", TARGET)
     snapshot = dict(hass_storage[storage_key(entry.entry_id)]["data"])
@@ -85,11 +85,13 @@ async def test_target_availability_follows_source(
     await hass.async_block_till_done()
     assert hass.states.get(number_id).state == "30"
     assert entry.runtime_data.values == {TARGET: 30, BUFFER: 10}
+    await advance_time(hass, 11)
+    assert entry.runtime_data.values == {TARGET: 95, BUFFER: 10}
     assert cover.commands == []
 
 
 async def test_initial_offline_target_is_unavailable(hass, cover, add_shutter):
-    """Create an unavailable target with its zero fallback until the source returns."""
+    """Keep the fallback unavailable and align the first valid source position."""
     cover.report(70, available=False)
     entry = await add_shutter(cover)
     number_id = setting_entity_id(hass, entry, "number", TARGET)
@@ -100,6 +102,8 @@ async def test_initial_offline_target_is_unavailable(hass, cover, add_shutter):
     cover.report(70)
     await hass.async_block_till_done()
     assert hass.states.get(number_id).state == "0"
+    await advance_time(hass, 11)
+    assert hass.states.get(number_id).state == "30"
     assert cover.commands == []
 
 
