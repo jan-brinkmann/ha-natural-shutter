@@ -1,9 +1,14 @@
-# Publication preparation
+# Repository and HACS maintenance
 
-This is a local source tree, not a published GitHub or HACS project. Version
-`1.0.0` is the initial source-file version requested in the requirements. No Git
-repository was initialized and no remote write, release, tag, or PR was created.
-Version changes require an explicit instruction from the owner.
+Natural Shutter is available from
+[jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter)
+and can be installed through HACS as a **custom repository**. The owner has
+completed repository creation. Installation instructions are in the
+[English README](../README.md#installation) and
+[German README](../README.de.md#installation).
+
+The integration version is `1.0.0`. Version changes require an explicit instruction
+from the owner.
 
 ## Configured metadata
 
@@ -11,15 +16,26 @@ At the owner's request, licensing and maintainer metadata follow the existing
 Manual Energy Metering and Shelly LED Control repositories. Their locally available
 `LICENSE` and integration manifests were consulted.
 
-- Planned repository: `https://github.com/jan-brinkmann/ha-natural-shutter`.
+- Repository: `https://github.com/jan-brinkmann/ha-natural-shutter`.
 - Documentation: `https://github.com/jan-brinkmann/ha-natural-shutter#readme`.
 - Issue tracker: `https://github.com/jan-brinkmann/ha-natural-shutter/issues`.
 - Codeowner: `@jan-brinkmann`.
 - License: MIT, with `Copyright (c) 2026 Jan Brinkmann and contributors`.
 
-**The repository does not exist yet.** These URLs are configured for its future
-publication and are not claims of an accessible repository or issue tracker.
-Both READMEs use the planned URL for their future HACS installation instructions.
+Both READMEs use this repository URL for HACS installation and manual ZIP downloads.
+The integration manifest already contains the matching documentation and issue
+tracker URLs.
+
+## HACS distribution
+
+Users add `https://github.com/jan-brinkmann/ha-natural-shutter` in **HACS → ⋮ →
+Custom repositories**, select **Integration**, and click **Add**. They can then
+find **Natural Shutter** in HACS, download it, and fully restart Home Assistant
+before adding the integration under **Settings → Devices & services**.
+
+GitHub releases are optional. Without releases, HACS downloads files from the
+repository's default branch. Default-store inclusion is a separate submission and
+review process; custom repository installation does not require it.
 
 ## Included images
 
@@ -36,52 +52,38 @@ high-resolution image requests. The supplied image files are preserved unchanged
 The integration requires HA 2026.8.0 for device linking without changes to source
 devices. All supported versions discover the bundled icon locally.
 
-## Remaining publication work
-
-- Create the planned public repository manually and publish the local source when
-  ready. Confirm that its README and issue tracker are accessible at the configured URLs.
-- Verify the chosen HACS validation version's local-brand support before submission.
-- Add a repository description, topics, and an enabled issue tracker when publishing.
-
-This remaining publication work does not prevent local manual installation.
-
-## Prepared layout
+## Repository layout
 
 There is exactly one integration directory under `custom_components/`; all runtime
 code and translations are inside it. The manifest includes version, config flow,
 cover dependency, device classification, calculated IoT class, and empty external
 requirements. `hacs.json` supplies the display name, minimum HA version, and README
 rendering. The repository also contains user documentation in two languages,
-architecture, tests, examples, and an initial local changelog.
+architecture, tests, examples, and a changelog.
 
-The HACS and Hassfest jobs from Manual Energy Metering's local `validate.yml` are
-prepared as `.github/workflows/hacs.yml` and `.github/workflows/hassfest.yml`.
-They run on pushes, pull requests, a daily schedule, or manual dispatch after
-publication. Both use `contents: read`; HACS PR comments are disabled. They select
-the current repository automatically and need no hardcoded owner or domain change.
-See [Testing](TESTING.md#prepared-github-actions) for details.
+## Maintenance and validation
 
-## Owner's later validation
+Run the [local checks](TESTING.md) after source changes. Official HA `hassfest` and
+HACS validation are separate checks; the local validator checks packaging and
+translation consistency. The current checkout contains no GitHub Actions workflow
+files. Earlier workflow-transfer work is recorded as development history in
+[Validation](VALIDATION.md#transferred-github-actions).
 
-Run the [local checks](TESTING.md), finish repository setup, and validate with the
-official HA `hassfest` and HACS validation tools in an isolated checkout/environment.
-After publishing the workflow files, review their results in the repository's
-Actions tab; no successful hosted validation has been claimed locally.
-Install the published repository as a HACS **custom repository** and confirm setup,
-translations, sliders, integration grouping, reciprocal device links, updates, and
-removal in a test HA instance. The local
-validator checks packaging and translation consistency; it is not an official
-HACS or hassfest certification.
+For an installation check, use a separate HA instance with HACS and confirm the
+download, setup, translations, sliders, integration grouping, reciprocal device
+links, updates, and removal. The [simulated-cover example](TESTING.md#manual-ui-check-in-a-separate-ha-instance)
+can be used without physical hardware. An interactive HACS installation and hosted
+validator runs were not performed as part of the local documentation update.
 
-HACS can use a repository's default branch when there are no releases. Default-store
-inclusion has separate review requirements. Release and repository management remain
-manual responsibilities of the owner; this document does not authorize Codex to
-perform any Git or GitHub writes.
+Repository settings, source publication, releases, and default-store submission
+remain manual responsibilities of the owner. This document does not authorize
+Codex to perform Git or GitHub writes.
 
 Official references:
 
-- [HACS integration requirements](https://www.hacs.dev/docs/publish/integration/)
-- [HACS repository metadata](https://hacs.dev/docs/publish/start/)
-- [HACS default-store review](https://hacs.dev/docs/publish/include/)
+- [HACS custom repositories](https://www.hacs.xyz/docs/faq/custom_repositories/)
+- [HACS integration requirements and optional releases](https://www.hacs.xyz/docs/publish/integration/)
+- [HACS repository metadata](https://www.hacs.xyz/docs/publish/start/)
+- [HACS default-store review](https://www.hacs.xyz/docs/publish/include/)
 - [HA manifest](https://developers.home-assistant.io/docs/creating_integration_manifest/)
 - [HA brand images](https://developers.home-assistant.io/docs/core/integration/brand_images/)

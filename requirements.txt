@@ -1,3 +1,11 @@
+# Ursprünglicher Entwicklungsauftrag
+
+Dieses Dokument bewahrt den ursprünglichen Auftrag als Entwicklungshistorie. Die damaligen Angaben zum noch fehlenden Repository und zur späteren HACS-Veröffentlichung beschreiben den Ausgangszustand.
+
+Aktueller Stand (2026-10-04): Das GitHub-Repository [jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter) wurde vom Eigentümer angelegt. Natural Shutter ist über HACS als benutzerdefiniertes Repository installierbar. Die aktuellen Anleitungen stehen in [README.de.md](README.de.md) und [README.md](README.md); Hinweise zur Pflege stehen in [docs/PUBLISHING.md](docs/PUBLISHING.md).
+
+---
+
 Entwickle eine Home-Assistant-Custom-Integration namens **Natural Shutter**, die später über HACS als benutzerdefiniertes Repository installierbar sein soll.
 
 Setze die folgenden Anforderungen vollständig um, einschließlich Tests und Dokumentation. Prüfe zuerst vorhandene Projektdateien, geltende AGENTS.md-Anweisungen sowie die aktuellen offiziellen Dokumentationen von Home Assistant und HACS.
