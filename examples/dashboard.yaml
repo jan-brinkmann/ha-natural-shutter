@@ -18,3 +18,8 @@ cards:
         name: Target position
       - entity: sensor.living_room_buffer_history
         name: Buffer
+  - type: logbook
+    title: Shutter activity
+    hours_to_show: 24
+    entities:
+      - number.living_room_target_position

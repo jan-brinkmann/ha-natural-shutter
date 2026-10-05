@@ -1,10 +1,15 @@
-"""Provide manual cover selection and safe reconfiguration through HA's UI."""
+"""Provide cover selection, safe reconfiguration, and optional phone notifications."""
 
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.cover import DOMAIN as COVER_DOMAIN
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import (
     ATTR_FRIENDLY_NAME,
     ATTR_SUPPORTED_FEATURES,
@@ -17,10 +22,22 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
 )
+from homeassistant.helpers.translation import async_get_translations
 
-from .const import CONF_INITIAL_TARGET, CONF_SOURCE, CONF_SOURCE_REGISTRY_ID, DOMAIN
+from .const import (
+    CONF_INITIAL_TARGET,
+    CONF_NOTIFICATION_SERVICE,
+    CONF_SOURCE,
+    CONF_SOURCE_REGISTRY_ID,
+    DOMAIN,
+    MOBILE_APP_SERVICE_PREFIX,
+)
 from .source import (
     current_position,
     normalize_percentage,
@@ -68,6 +85,12 @@ class NaturalShutterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Create one entry per manually selected cover, rejecting duplicate mappings."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Offer optional phone notifications without reloading the mapping."""
+        return NaturalShutterOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -143,6 +166,76 @@ class NaturalShutterConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id=step,
             data_schema=self.add_suggested_values_to_schema(
                 schema, user_input or defaults
+            ),
+            errors=errors,
+        )
+
+
+class NaturalShutterOptionsFlow(OptionsFlow):
+    """Select one registered Companion App notifier independently of settings."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Save or disable phone notifications without alignment or movement.
+
+        Reject missing or non-mobile notification services. A previously selected
+        missing service stays visible so the user can replace or disable it.
+        """
+        services = sorted(
+            service
+            for service in self.hass.services.async_services().get("notify", {})
+            if service.startswith(MOBILE_APP_SERVICE_PREFIX)
+        )
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            selected = user_input[CONF_NOTIFICATION_SERVICE]
+            if selected and selected not in services:
+                errors[CONF_NOTIFICATION_SERVICE] = "notification_service_unavailable"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        **self.config_entry.options,
+                        CONF_NOTIFICATION_SERVICE: selected,
+                    },
+                )
+
+        translations = await async_get_translations(
+            self.hass, self.hass.config.language, "common", [DOMAIN]
+        )
+        prefix = f"component.{DOMAIN}.common."
+        choices = [
+            SelectOptionDict(
+                value="", label=translations[f"{prefix}notification_disabled"]
+            ),
+            *[
+                SelectOptionDict(value=service, label=f"notify.{service}")
+                for service in services
+            ],
+        ]
+        current = self.config_entry.options.get(CONF_NOTIFICATION_SERVICE, "")
+        if current and current not in services:
+            choices.append(
+                SelectOptionDict(
+                    value=current,
+                    label=translations[f"{prefix}notification_unavailable"].format(
+                        service=f"notify.{current}"
+                    ),
+                )
+            )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_NOTIFICATION_SERVICE, default=current
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=choices, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    )
+                }
             ),
             errors=errors,
         )

@@ -23,6 +23,28 @@
       "reconfigure_successful": "The shutter configuration has been updated. No movement was triggered."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Notifications for suppressed movement",
+        "description": "Choose a phone registered with the Home Assistant Companion App, or disable push notifications. A changed target suppressed by the position/buffer rule always creates an Activity entry. This option takes effect immediately without reloading or moving the shutter.",
+        "data": {"notification_service": "Phone notification service"}
+      }
+    },
+    "error": {
+      "notification_service_unavailable": "Select an available mobile_app notification service or disable notifications."
+    }
+  },
+  "common": {
+    "notification_disabled": "Push notifications disabled",
+    "notification_unavailable": "{service} (unavailable)",
+    "movement_suppressed_title": "{name}: No movement",
+    "movement_command_title": "{name}: Position command sent",
+    "movement_decision_message": "{timestamp} · {source}: {reason}. Target {previous_target} → {target} %, actual {actual} % (HA {position} %), HA target {ha_target} %, difference {distance} pp, buffer {buffer} pp.",
+    "command_sent": "Position command sent to source cover",
+    "already_at_target": "Already at the requested position",
+    "below_buffer": "Difference below buffer"
+  },
   "entity": {
     "number": {
       "target_position": {"name": "Target position"},

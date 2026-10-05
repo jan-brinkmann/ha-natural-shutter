@@ -65,6 +65,11 @@ This YAML is a test fixture, not a requirement for normal Natural Shutter setup.
 4. Change the position helper directly to 45%; the saved target must stay 70%.
 5. Set buffer to 10%, change target to 71%, then back to 70%. The source should
    move only when the actual difference meets the threshold.
+   For each changed target suppressed by the rule, check **Activity** on the target
+   slider and virtual device: verify the reason, old/new target, both position scales,
+   distance, buffer, and local timestamp. Successful position commands create a
+   **Position command sent** Activity entry without a phone notification, including
+   when the difference equals the buffer. An already reached position has its own reason.
 6. Use the [standard card example](../examples/dashboard.yaml) with the created IDs.
    Confirm slider rendering and the setting sensors in History.
 7. Reload and restart: the target must equal 100 minus the simulated source position;
@@ -76,6 +81,20 @@ This YAML is a test fixture, not a requirement for normal Natural Shutter setup.
 10. Remove the Natural Shutter entry: its entities and settings disappear, while the
    original template cover and helper remain.
 
+Before removing the entry, optionally use **Configure** to select a Companion App
+phone registered with this separate test instance. Trigger a buffered target change
+and compare the phone message with Activity. Switch or disable the recipient and
+confirm the options take effect without reload, target alignment, or movement.
+Activity continues with push disabled. Repeating the same normalized target,
+changing only the buffer, external reports, setup, and reload create no suppression
+messages. Source validation and cover errors keep their existing error reporting.
+Actual phone delivery is a manual check; automated tests register simulated
+`notify.mobile_app_*` services and send no real messages.
+Also trigger an allowed position command with a phone selected: confirm the
+**Position command sent** entry appears in Activity and no phone message is sent.
+Its actual position is the snapshot before dispatch. Failed actions do not produce
+a success entry; the integration does not confirm physical movement or target arrival.
+
 Confirm all mappings appear together under **Integrations → Natural Shutter**.
 The template demo has no registered actuator device and therefore no device link.
 In a separate device-backed test setup, inspect **Linked devices** in both directions
@@ -84,6 +103,12 @@ and confirm the actuator retains its name, ownership, and original entities.
 Do not run this optional example in a production instance as part of automated tests.
 The automated test suite also verifies unavailable/invalid source data, failed
 actions, duplicate sources, endpoint buffers, listener cleanup, and concurrent writes.
+Suppression tests also check German/English message values, HA-local timestamps,
+phone selection and opt-out, missing or failed notification services, recipient
+persistence across reload/reconfiguration, action contexts, and target renames.
+The Recorder suite queries command and suppression entries using real Activity entity and
+device filters against isolated SQLite; it initializes the processor's filter
+configuration directly, without starting the frontend.
 
 ## Limits of the executed validation
 

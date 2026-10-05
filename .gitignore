@@ -4,9 +4,8 @@ __pycache__/
 *$py.class
 
 # Test, type-checking, and lint caches
-tests/__pycache__/
+*/__pycache__/*
 .pytest_cache/
-*.pyc
 .mypy_cache/
 .pyright/
 .ruff_cache/

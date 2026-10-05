@@ -65,6 +65,7 @@ def validate() -> None:
     assert manifest["name"] == hacs["name"] == names["NAME"]
     assert manifest["config_flow"] is True
     assert manifest["dependencies"] == ["cover"]
+    assert manifest["after_dependencies"] == ["logbook", "notify"]
     assert manifest["integration_type"] == "device"
     assert manifest["iot_class"] == "calculated"
     assert manifest["requirements"] == []
