@@ -43,6 +43,12 @@ async def test_manual_selection_and_duplicate(hass, cover, add_shutter):
         "sensor",
         "switch",
     ]
+    assert hass.states.get(
+        setting_entity_id(hass, entry, "switch", ENABLED)
+    ).state == "off"
+    assert hass.states.get(
+        setting_entity_id(hass, entry, "binary_sensor", ENABLED)
+    ).state == "off"
     assert (
         entry.data[CONF_SOURCE_REGISTRY_ID]
         == er.async_get(hass).async_get(cover.entity_id).id

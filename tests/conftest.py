@@ -72,8 +72,10 @@ async def cover(hass: HomeAssistant) -> SimulatedCover:
 def add_shutter(hass: HomeAssistant) -> Callable[..., Coroutine[Any, Any, ConfigEntry]]:
     """Return a helper that creates an entry using the actual manual config flow."""
 
-    async def add(entity: SimulatedCover, name: str | None = None) -> ConfigEntry:
-        """Create a mapping and wait until all setting entities are loaded."""
+    async def add(
+        entity: SimulatedCover, name: str | None = None, enabled: bool = True
+    ) -> ConfigEntry:
+        """Create a mapping; enable it by default for command behavior tests."""
         data = {CONF_SOURCE: entity.entity_id}
         if name is not None:
             data[CONF_NAME] = name
@@ -83,7 +85,10 @@ def add_shutter(hass: HomeAssistant) -> Callable[..., Coroutine[Any, Any, Config
         assert result["type"] == "create_entry", result
         await hass.async_block_till_done()
         assert entity.commands == []
-        return result["result"]
+        entry = result["result"]
+        if enabled:
+            await set_enabled(hass, entry, True)
+        return entry
 
     return add
 

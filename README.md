@@ -33,7 +33,7 @@ Shelly, and other integrations.
 
 ## Enable or deactivate a device
 
-Each virtual device has its own **Enabled** switch, initially on. Its state is
+Each virtual device has its own **Enabled** switch, initially off for new devices. Its state is
 saved independently and restored after restart, reload, and source reconfiguration.
 Existing devices without a saved activation setting start enabled.
 

@@ -14,13 +14,12 @@ from .conftest import SimulatedCover, set_enabled, set_setting, setting_entity_i
 
 
 async def test_activation_entities_and_disabled_settings(hass, cover, add_shutter):
-    """Keep switch and history synchronized while disabled sliders stay editable."""
-    entry = await add_shutter(cover)
+    """Create disabled and keep switch/history synchronized with editable sliders."""
+    entry = await add_shutter(cover, enabled=False)
     switch_id = setting_entity_id(hass, entry, "switch", ENABLED)
     sensor_id = setting_entity_id(hass, entry, "binary_sensor", ENABLED)
     for entity_id in (switch_id, sensor_id):
-        assert hass.states.get(entity_id).state == "on"
-    await set_enabled(hass, entry, False)
+        assert hass.states.get(entity_id).state == "off"
     await set_setting(hass, entry, TARGET, 70)
     await set_setting(hass, entry, BUFFER, 10)
     assert entry.runtime_data.values == {TARGET: 70, BUFFER: 10}

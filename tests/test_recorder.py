@@ -64,7 +64,7 @@ async def test_recorder_stores_setting_transitions(hass, cover, add_shutter):
     )
     assert [state.state for state in states[target_id]] == ["30", "70", "80"]
     assert [state.state for state in states[buffer_id]] == ["0", "100"]
-    assert [state.state for state in states[enabled_id]] == ["on", "off", "on"]
+    assert [state.state for state in states[enabled_id]] == ["off", "on", "off", "on"]
     assert cover.commands == []
 
 

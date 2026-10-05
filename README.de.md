@@ -33,8 +33,8 @@ Positionsbefehlen, beispielsweise aus Homematic IP, Shelly und anderen Integrati
 
 ## Ein Gerät aktivieren oder deaktivieren
 
-Jedes virtuelle Gerät besitzt einen eigenen Schalter **Aktiviert**, der anfangs
-eingeschaltet ist. Der Zustand wird unabhängig pro Instanz gespeichert und nach
+Jedes neu angelegte virtuelle Gerät besitzt einen eigenen Schalter **Aktiviert**,
+der anfangs ausgeschaltet ist. Der Zustand wird unabhängig pro Instanz gespeichert und nach
 Neustart, Reload und Neukonfiguration wiederhergestellt. Bestehende Geräte ohne
 gespeicherten Aktivierungszustand starten aktiviert.
 

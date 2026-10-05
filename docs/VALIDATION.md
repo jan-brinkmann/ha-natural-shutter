@@ -24,12 +24,17 @@ hardware-free template-cover example.
 
 ## Per-device activation (2026-10-05)
 
-Each virtual device now has a persistent activation switch and a binary history
-sensor. Disabled target changes remain saved and produce a localized disabled
+Each new virtual device has a persistent activation switch initially off and a
+binary history sensor. Existing records without an activation value default to
+enabled. Disabled target changes remain saved and produce a localized disabled
 Activity entry, including when the source is unavailable, without cover commands
 or phone notifications. Target and buffer stay editable. Activation is independent
 per entry and survives reload, restart, and source replacement. Existing settings
 default to enabled; enabling does not replay a saved target.
+
+The test and lint results below were run before the later adjustment that made new
+entries start off. The setup contract assertions and test fixture defaults were
+updated for that adjustment, but automated checks were not rerun afterward.
 
 | Executed command | Result |
 | --- | --- |

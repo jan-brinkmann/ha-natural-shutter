@@ -28,8 +28,9 @@ Config-entry data contains `source_entity_id`, optional `source_registry_id`, an
 `initial_target`. The entry title is the user-selected label or source friendly
 name. A `ShutterController` is assigned to typed `ConfigEntry.runtime_data`.
 The current settings are an integer dictionary: `target_position` and `buffer`.
-The controller also owns a boolean `enabled`, defaulting to true. All three
-settings share one atomic storage record and one write lock per mapping.
+The controller also owns a boolean `enabled`, initially false for new mappings.
+Existing records without this field default to true. All three settings share one
+atomic storage record and one write lock per mapping.
 Config-entry options hold `notification_service`: a registered `mobile_app_*`
 service in the `notify` domain, or an empty string for disabled push. Existing
 entries without this option default to disabled push. An Options Flow lists only
@@ -109,7 +110,7 @@ of zero silently.
 
 The config flow snapshots an initial fallback target: the rounded value of
 `100 - current_position`, or zero if no valid live position exists. Buffer starts
-at zero, with activation enabled. A missing settings file initializes from this
+at zero, with activation disabled. A missing settings file initializes from this
 snapshot. Older records without `enabled` load as enabled and are saved with the
 new field using the existing storage schema. Explicit non-boolean activation
 values are rejected. Reload and source reconfiguration retain activation.

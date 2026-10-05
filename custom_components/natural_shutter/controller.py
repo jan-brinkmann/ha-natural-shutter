@@ -59,7 +59,7 @@ class ShutterController:
         self.entry = entry
         self.device_link = ShutterDeviceLink(hass, entry)
         self.values = {TARGET: 0, BUFFER: 0}
-        self.enabled = True
+        self.enabled = False
         self.store: Store[dict[str, int | bool]] = Store(
             hass, STORAGE_VERSION, storage_key(entry.entry_id), atomic_writes=True
         )
