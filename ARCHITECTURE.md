@@ -11,9 +11,10 @@ card, or historical database. The integration has no third-party runtime package
 | Component | Responsibility |
 | --- | --- |
 | `const.py` | Shared product name, domain, keys, platforms, storage key |
-| `config_flow.py` | Manual source validation, duplicate checks, initial snapshot, reconfiguration |
+| `config_flow.py` | Manual source validation, duplicate checks, initial snapshot, reconfiguration, notification options |
 | `source.py` | Registry identity resolution and finite percentage validation |
 | `controller.py` | Persistent settings, load-time alignment, source availability, serialized explicit commands |
+| `activity.py` | Localized command/suppression snapshots for HA Activity, with optional suppression notifications |
 | `device.py` | Reciprocal actuator links maintained only on the owned virtual device |
 | `entity.py` | Stable entity IDs, virtual device grouping, subscription cleanup |
 | `number.py` | Target and buffer sliders; explicit `async_set_native_value` |
@@ -24,6 +25,12 @@ Config-entry data contains `source_entity_id`, optional `source_registry_id`, an
 `initial_target`. The entry title is the user-selected label or source friendly
 name. A `ShutterController` is assigned to typed `ConfigEntry.runtime_data`.
 The current settings are an integer dictionary: `target_position` and `buffer`.
+Config-entry options hold `notification_service`: a registered `mobile_app_*`
+service in the `notify` domain, or an empty string for disabled push. Existing
+entries without this option default to disabled push. An Options Flow lists only
+Companion App services and allows opt-out even when a saved service has disappeared.
+The controller reads options directly; changing the recipient does not reload,
+align the target, or issue a cover command. Source reconfiguration retains options.
 Config-entry schema version and storage schema version are independent of the
 integration's initial release version, which is defined in `manifest.json`.
 
@@ -127,7 +134,7 @@ Equal normalized values return without a save, notification, or command.
 The buffer setter only saves and publishes its setting. Sensors only read stored
 values. Setup, reconfiguration, unload, restart, restoration, registry events,
 availability changes, actual position reports, external movements, and sensor
-updates have no path to command dispatch. There is no timer, retry queue, feedback
+updates have no path to command dispatch. There is no movement timer, retry queue, feedback
 controller, or pending target replay. Scenes that explicitly write the target are
 subject to the same equality check and validation as any other explicit action.
 
@@ -144,6 +151,44 @@ Send one `cover.set_cover_position` action with `position: t` iff
 `d > 0 and d >= b`. Buffer is a distance in percentage points and never offsets the
 destination. Both directions, equality at the threshold, and endpoints follow this
 same rule. The target is saved even when the buffer suppresses movement.
+
+## Position-decision Activity and suppression notifications
+
+Only an accepted changed normalized target with valid source data reaches reporting.
+The existing `d == 0 or d < b` branch produces one localized Activity entry, with
+distinct reasons for an already reached target and a difference below the buffer.
+An equality at the nonzero buffer threshold dispatches the existing cover command
+and records a command entry after the blocking action returns successfully. Every
+successful position command produces exactly one such entry, with no phone
+notification. The source position is the snapshot used before dispatch; the
+entry's timestamp is recorded after the successful action return. The entry
+confirms service-call success, without asserting physical movement or target arrival.
+Equal normalized writes, buffer changes, setup,
+reload, source feedback, source validation errors, and cover-action failures do not
+produce these diagnostics. Physical movement and later position feedback are not
+monitored. No command, target adjustment, or retry is added by reporting.
+
+The snapshot includes the entry name, resolved source entity ID, previous and new
+saved target, actual position in Natural Shutter and HA scales, HA target, distance,
+buffer, and reporting timestamp. `dt_util.now()` supplies HA's local time; the ISO
+timestamp includes seconds and UTC offset. Messages use the standard translation
+helper's `common` category in HA's configured language, with English fallback.
+
+The standard `logbook.async_log_entry` helper emits an event with domain
+`natural_shutter`, the originating action context, and the target number's current
+registry entity ID. This association makes it visible in entity and virtual-device
+Activity filters, including after renaming the target number. Activity/Logbook and
+Recorder control visibility, filtering, and retention; no custom history is stored.
+The manifest orders setup after Logbook and Notify when these optional integrations
+are configured, without requiring them for slider operation.
+
+For suppressed decisions, Activity is recorded before sending an optional `notify.mobile_app_*` message with
+the same title, body, and context. The service is rechecked at dispatch. A missing
+service, notification error, or notification timeout is logged without raising a
+new target-write error or losing the Activity event. Blocking notification dispatch
+is limited to ten seconds and remains inside the write lock, preserving decision
+order and the saved buffer snapshot. Future writes use any changed phone option;
+messages are neither queued nor retried.
 
 ## Availability and error handling
 
@@ -172,12 +217,13 @@ between validation and dispatch; its integration determines the resulting error.
 ## Concurrency and teardown
 
 One `asyncio.Lock` per mapping covers comparison, saving, publishing, source
-validation, and the blocking cover action. Requests are processed in lock acquisition
+validation, the blocking cover action, and decision reporting. Requests are processed in lock acquisition
 order. An older command cannot overtake a newer one. Buffer changes join the same
 sequence, giving each target decision a consistent saved buffer. Different mappings
 operate independently. Ordered writes are not debounced: each distinct explicit
 target may dispatch its own command. A slow source action delays later writes for
-that mapping.
+that mapping. A suppressed write may also wait up to ten seconds for the selected
+notification service before subsequent writes proceed.
 
 Unload removes entity subscriptions, marks the controller inactive, detaches entity
 registry, device registry, and source state tracking, and waits for an already running write. Late registry or
@@ -239,6 +285,18 @@ References checked during implementation on 2026-10-04:
   were adopted, with `jan-brinkmann/ha-natural-shutter` configured as the planned
   repository. It does not exist yet; no release claims were reused.
 
+References checked for suppression reporting on 2026-10-05:
+
+- [Log activity](https://www.home-assistant.io/actions/logbook.log/) and
+  [Activity card](https://www.home-assistant.io/dashboards/logbook/).
+- [Companion App notifications](https://companion.home-assistant.io/docs/notifications/notifications-basic/)
+  and [backend localization](https://developers.home-assistant.io/docs/internationalization/core/).
+- The installed HA 2026.9.4 source for `logbook.async_log_entry`, Activity entity/device
+  queries, translation fallback, `SelectSelector`, and `OptionsFlow` was inspected.
+- HA's [device page](https://github.com/home-assistant/frontend/blob/dev/src/panels/config/devices/ha-config-device-page.ts)
+  passes the device's entity IDs together with its device ID to the Activity card;
+  the Recorder test uses that same combination and HA's entity filtering.
+
 ## Test strategy and known limits
 
 The test suite loads the real integration, config flows, number/sensor platforms,
@@ -261,6 +319,16 @@ identical through setup, reload, reconfiguration, and removal, including sources
 with identifiers only, connections only, and offline states. They also cover late
 device association, changed keys, source removal, child channels, device listener
 cleanup, and rejection of older HA versions before any storage or device writes.
+
+Decision tests inspect real Activity events and simulated phone service calls,
+including localized values, local time, action context, inclusive buffer boundaries,
+fractional positions, endpoint targets, opt-in/out, phone switching, stale notifiers,
+push failures, source replacement, independent mappings, entity renames, and excluded
+events. Recorder tests retrieve the messages through HA's actual entity and device
+Activity queries against isolated SQLite. Successful commands are checked for
+localized snapshots, context and rename association, no phone notification, and
+logging only after service success, retaining the actual position before dispatch.
+No phone receives real messages in tests.
 
 See [Testing](docs/TESTING.md) for commands and [Publishing](docs/PUBLISHING.md) for
 remaining repository setup and validation. HACS installation, remote HACS validation,

@@ -293,6 +293,108 @@ The integration version remains `1.0.0`. No interactive frontend or physical
 actuator test was performed. All changes remain local and unstaged; no Git or
 GitHub state was changed.
 
+## Suppression Activity and optional phone notifications
+
+On 2026-10-05, reporting was added exclusively to the existing
+`distance == 0 or distance < buffer` decision for accepted changed normalized
+targets. Each suppression creates a standard Activity entry associated with the
+target number and, through the device page's entity filter, its virtual device.
+The message distinguishes an already reached position from a difference below
+the buffer and contains the source ID, old/new targets, actual position on both
+scales, HA target, distance, buffer, and HA-local timestamp with UTC offset.
+
+A per-entry Options Flow selects one registered Companion App notification service
+or disables push. Options apply without reloading or aligning the target and are
+retained across reload and source replacement. Push defaults to disabled. Activity
+is recorded first; missing services, push errors, and timeouts do not fail the
+target write or cause movement. Notification dispatch is limited to ten seconds.
+The existing movement rule, integration version `1.0.0`, and error reporting for
+invalid/unavailable sources and failed cover commands are retained. Physical
+movement and subsequent position feedback are not monitored.
+
+Tests inspect real Activity events and mocked phone services for German/English
+messages, local time, action contexts, buffer boundaries, fractional positions,
+endpoint targets, opt-in/out, switching, stale recipients, push failures, target
+renames, source replacement, and independent mappings. Excluded events produce
+no suppression diagnostics. A real SQLite Recorder test queries the entries
+through HA's entity filter and the combination of device/entity filters used by
+the frontend device card. It initializes the processor's filter configuration
+without starting the frontend. No real phone messages or actuator commands were sent.
+
+Changed or added source files:
+
+- Runtime: `custom_components/natural_shutter/activity.py` (new), `config_flow.py`,
+  `const.py`, `controller.py`, and `manifest.json`.
+- Translations: `custom_components/natural_shutter/strings.json`,
+  `translations/en.json`, and `translations/de.json`.
+- Tests/validation: `tests/test_activity.py` (new), `tests/test_recorder.py`,
+  `tests/test_examples.py`, and `scripts/validate_project.py`.
+- Documentation/example: `README.md`, `README.de.md`, `ARCHITECTURE.md`,
+  `CHANGELOG.md`, `docs/TESTING.md`, `docs/VALIDATION.md`, and `examples/dashboard.yaml`.
+
+Executed final checks:
+
+| Executed command | Result |
+| --- | --- |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q --cov --cov-report=term-missing --tb=short --show-capture=no` | **163 passed**, 10.38 seconds; **100%** integration coverage (453 statements, 100 branches) |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff check .` | Passed |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .` | Passed; 29 Python files formatted |
+| `python3 scripts/validate_project.py` | Passed |
+| `PYTHONPYCACHEPREFIX=/tmp/natural-shutter-compile-cache python3 -m compileall -q custom_components tests scripts` | Passed |
+| `git diff --check` | Passed |
+
+The full pytest output is saved locally at `/tmp/natural-shutter-full-tests.log`.
+Some sandboxed test attempts stalled during fixture setup and were interrupted;
+a full-suite start also encountered the sandbox's temporary mount quota. The
+successful full suite ran outside the sandbox with approval, using the same
+isolated fixtures. Test execution also updated the repository's tracked
+`__pycache__/*.pyc` artifacts and generated `.coverage` plus bytecode for the new
+modules; these remain unstaged along with the source changes.
+No Git metadata or GitHub state was modified. Actual phone delivery and interactive
+frontend rendering remain manual checks.
+
+## Additional Activity for successful position commands
+
+At the owner's follow-up request on 2026-10-05, a successful blocking
+`cover.set_cover_position` call now creates one additional **Position command
+sent** / **Fahrbefehl gesendet** Activity entry. Command and suppression entries
+share the same snapshot format and target-number association. The command entry
+retains the actual position used before dispatch and records its timestamp after
+the successful action return. Physical travel and target arrival are not verified.
+Command entries never call a phone service, even with push enabled for suppression.
+Failed actions produce no success entry; unchanged writes, buffer changes, source
+reports, setup, and reload retain their existing behavior.
+
+Tests check German/English values, local timestamps, action context and renamed
+target association, logging after a gated command succeeds, position feedback
+during that command, buffer boundaries, and no phone calls for commands. Recorder
+queries verify both decision types in entity and virtual-device Activity filters.
+All services are simulated. The entire suite passed in the sandbox on this follow-up.
+
+Files changed in this follow-up:
+
+- Runtime: `custom_components/natural_shutter/activity.py` and `controller.py`.
+- Translations: `custom_components/natural_shutter/strings.json`,
+  `translations/en.json`, and `translations/de.json`.
+- Tests: `tests/test_activity.py` and `tests/test_recorder.py`.
+- Documentation/example: `README.md`, `README.de.md`, `ARCHITECTURE.md`,
+  `CHANGELOG.md`, `docs/TESTING.md`, `docs/VALIDATION.md`, and `examples/dashboard.yaml`.
+
+Final checks for this follow-up:
+
+| Executed command | Result |
+| --- | --- |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q --cov --cov-report=term-missing --tb=short --show-capture=no` | **168 passed**, 10.70 seconds; **100%** integration coverage (457 statements, 102 branches) |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff check .` | Passed |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .` | Passed; 29 Python files formatted |
+| `python3 scripts/validate_project.py` | Passed |
+| `PYTHONPYCACHEPREFIX=/tmp/natural-shutter-compile-cache python3 -m compileall -q custom_components tests scripts` | Passed |
+| `git diff --check` | Passed |
+
+The latest pytest output is at `/tmp/natural-shutter-full-tests.log`. Source changes
+and generated test artifacts remain local and unstaged. The integration version
+remains `1.0.0`; no Git metadata or GitHub state was changed.
+
 ## Remaining limits and publication work
 
 - HA 2026.8.0 provides the required device isolation APIs; the actual minimum

@@ -26,6 +26,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 
+from .activity import async_report_decision
 from .const import (
     BUFFER,
     CONF_INITIAL_TARGET,
@@ -224,7 +225,8 @@ class ShutterController:
         """Save a changed setting; only target writes may issue one cover command.
 
         Writes are processed in lock acquisition order, including the blocking
-        action call. Errors never roll back a saved target or queue a retry.
+        action call, Activity reporting, and optional suppression notification.
+        Errors never roll back a saved target or queue a retry.
         """
         try:
             normalized = normalize_percentage(value)
@@ -240,16 +242,19 @@ class ShutterController:
                 )
             if normalized == self.values[key]:
                 return
+            previous_target = self.values[TARGET]
             updated = {**self.values, key: normalized}
             await self.store.async_save(updated)
             self.values = updated
             for listener in tuple(self._listeners[key]):
                 listener()
             if key == TARGET and self._active:
-                await self._async_command(normalized, context)
+                await self._async_command(normalized, previous_target, context)
 
-    async def _async_command(self, target: int, context: Context | None) -> None:
-        """Validate live source data and apply the buffer to one explicit write."""
+    async def _async_command(
+        self, target: int, previous_target: int, context: Context | None
+    ) -> None:
+        """Report suppressed writes or successful commands under the buffer rule."""
         source = resolve_source(self.hass, self.entry.data)
         if (
             source is None
@@ -269,6 +274,17 @@ class ShutterController:
         ha_target = 100 - target
         distance = abs(position - ha_target)
         if distance == 0 or distance < self.values[BUFFER]:
+            await async_report_decision(
+                self.hass,
+                self.entry,
+                source=source,
+                previous_target=previous_target,
+                target=target,
+                position=position,
+                buffer=self.values[BUFFER],
+                context=context,
+                command_sent=False,
+            )
             return
         try:
             await self.hass.services.async_call(
@@ -291,6 +307,17 @@ class ShutterController:
                 translation_key="command_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
+        await async_report_decision(
+            self.hass,
+            self.entry,
+            source=source,
+            previous_target=previous_target,
+            target=target,
+            position=position,
+            buffer=self.values[BUFFER],
+            context=context,
+            command_sent=True,
+        )
 
     def _raise_skipped(self, reason: str) -> NoReturn:
         """Log and raise a translated action error after retaining the new target."""

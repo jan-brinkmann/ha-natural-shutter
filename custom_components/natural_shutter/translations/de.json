@@ -23,6 +23,28 @@
       "reconfigure_successful": "Die Rollladenkonfiguration wurde aktualisiert. Es wurde keine Fahrt ausgelöst."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Benachrichtigungen bei unterdrückter Fahrt",
+        "description": "Wähle ein Handy mit registrierter Home Assistant Companion App oder deaktiviere Push-Nachrichten. Eine durch die Positions-/Pufferregel unterdrückte Zieländerung erzeugt immer einen Aktivitätseintrag. Diese Option gilt sofort, ohne erneutes Laden oder Bewegen des Rollladens.",
+        "data": {"notification_service": "Benachrichtigungsdienst des Handys"}
+      }
+    },
+    "error": {
+      "notification_service_unavailable": "Wähle einen verfügbaren mobile_app-Benachrichtigungsdienst oder deaktiviere die Nachrichten."
+    }
+  },
+  "common": {
+    "notification_disabled": "Push-Nachrichten deaktiviert",
+    "notification_unavailable": "{service} (nicht verfügbar)",
+    "movement_suppressed_title": "{name}: Keine Fahrt",
+    "movement_command_title": "{name}: Fahrbefehl gesendet",
+    "movement_decision_message": "{timestamp} · {source}: {reason}. Ziel {previous_target} → {target} %, Ist {actual} % (HA {position} %), HA-Ziel {ha_target} %, Abstand {distance} pp, Puffer {buffer} pp.",
+    "command_sent": "Fahrbefehl an Quell-Rollladen gesendet",
+    "already_at_target": "Zielposition bereits erreicht",
+    "below_buffer": "Abstand kleiner als Puffer"
+  },
   "entity": {
     "number": {
       "target_position": {"name": "Ziel-Position"},

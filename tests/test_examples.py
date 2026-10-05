@@ -61,5 +61,10 @@ def test_dashboard_example_uses_standard_cards():
     """Keep the dashboard example usable without custom cards or button actions."""
     card = load_yaml(str(EXAMPLES / "dashboard.yaml"))
     assert card["type"] == "vertical-stack"
-    assert [child["type"] for child in card["cards"]] == ["entities", "history-graph"]
+    assert [child["type"] for child in card["cards"]] == [
+        "entities",
+        "history-graph",
+        "logbook",
+    ]
     assert len(card["cards"][0]["entities"]) == len(card["cards"][1]["entities"]) == 2
+    assert card["cards"][2]["entities"] == ["number.living_room_target_position"]

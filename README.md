@@ -27,6 +27,8 @@ Shelly, and other integrations.
 - Target slider availability follows the source cover; reconnection causes no movement.
 - All added shutters appear under **Natural Shutter** in the **Integrations** tab.
 - Reciprocal **Linked devices** navigation between each virtual device and its actuator.
+- Activity entries for sent position commands and targets suppressed by the
+  position/buffer rule; optional phone notifications for suppressed movement.
 
 ## Target position and buffer
 
@@ -136,8 +138,59 @@ data:
 
 Use **Reconfigure** on an entry's menu to rename it or explicitly replace a missing
 source. Reconfiguration reloads the entry: the buffer is retained and the target
-adopts the current source position if valid, without movement. An Options Flow is
-unnecessary: both operational settings are the sliders themselves.
+adopts the current source position if valid, without movement. Target and buffer
+remain adjustable directly through their sliders.
+
+### Understand position decisions
+
+When you change the normalized target and the existing position/buffer rule prevents
+a position command, an **Activity** entry appears for the target slider and its
+virtual Natural Shutter device. The message distinguishes **Difference below buffer**
+from **Already at the requested position**. The new target remains saved.
+
+When the integration issues a position command, it also creates a **Position command
+sent** entry after `cover.set_cover_position` returns successfully. This entry
+contains the same values, using the actual position before dispatch. It never
+sends a phone notification. It confirms the successful action call; physical travel
+and reaching the target position remain unmonitored.
+
+To receive suppressed-movement messages on your phone, open **Settings → Devices & services →
+Natural Shutter → Configure** for the desired shutter entry. Select the phone's
+`notify.mobile_app_…` service under **Phone notification service**. The phone must
+be registered with your HA instance through the Companion App and allow notifications;
+the app provides its own
+[notification service](https://companion.home-assistant.io/docs/notifications/notifications-basic/).
+With no registered phones, the only choice is **Push notifications disabled**.
+Push is disabled initially and can be enabled, switched, or disabled independently
+for each shutter. Changes apply immediately without reload, position alignment,
+or movement. Activity entries are also created when push is disabled.
+
+Activity entries and suppression messages contain the date and time in HA's configured time zone, including
+the UTC offset, shutter name and source entity ID, previous and new targets,
+actual position on both scales, HA target, difference, and buffer in percentage
+points (`pp`). Messages follow HA's configured language (German or English,
+with English fallback).
+
+Example: change the target from 30 to 70%, with actual HA position 35% and buffer 10 pp:
+
+```text
+Living room: No movement
+2026-10-05 14:34:56+02:00 · cover.living_room: Difference below buffer.
+Target 30 → 70 %, actual 65 % (HA 35 %), HA target 30 %, difference 5 pp, buffer 10 pp.
+```
+
+A difference equal to the buffer still sends a command and creates a **Position
+command sent** entry. Setting the same normalized target, buffer changes, external
+movement, startup, and reload create no position-decision entries or phone messages.
+Unavailable sources, invalid
+positions, and failed cover actions retain their existing action errors and log
+messages. Later physical movement or position feedback is not monitored.
+
+Viewing these entries requires HA **Activity/Logbook** and **Recorder**; their filters
+and retention also apply to these entries. A standard dashboard can display them
+with the Activity card in the example linked below. If the selected phone service
+is missing or a push fails, the Activity entry is retained and HA logs the notification
+failure. The target and movement decision are preserved; there is no automatic retry.
 
 See [standard dashboard examples](examples/dashboard.yaml),
 [local test instructions](docs/TESTING.md), and [Architecture](ARCHITECTURE.md).
