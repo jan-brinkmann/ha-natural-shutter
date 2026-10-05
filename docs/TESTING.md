@@ -33,28 +33,20 @@ devices. Test source assignments and simulated manufacturer metadata are created
 exclusively inside isolated HA fixtures. Older HA versions are rejected before
 settings storage or device registration.
 
-## Prepared GitHub Actions
+## Official validation
 
-Two workflow files carry over the validation jobs from the local Manual Energy
-Metering reference's `.github/workflows/validate.yml`:
-
-- [HACS](../.github/workflows/hacs.yml) validates the repository as an integration
-  with `hacs/action@main`. It uses the current repository context, so no repository
-  name or integration-domain override is needed. PR comments are disabled.
-- [Hassfest](../.github/workflows/hassfest.yml) checks out the repository using
-  `actions/checkout@v4` and validates its integration with
-  `home-assistant/actions/hassfest@master`.
-
-Both retain the reference's triggers: pushes, pull requests, daily at 00:00 UTC,
-and manual dispatch. Token permissions are limited to `contents: read`.
-They become available after the owner publishes the repository; no GitHub workflow
-has been triggered during local development. The existing pytest, Ruff, and local
-packaging checks above remain separate from these official validators.
+Official HACS and Home Assistant `hassfest` validation are separate from the
+pytest, Ruff, and local packaging checks above. The current checkout contains no
+GitHub Actions workflow files. The earlier workflow-transfer checks are recorded
+as development history in [Validation](VALIDATION.md#transferred-github-actions);
+they do not document a successful hosted validator run.
 
 ## Manual UI check in a separate HA instance
 
-Copy `custom_components/natural_shutter` into the test instance's configuration
-directory and restart it. Merge [the simulated cover example](../examples/simulated_cover.yaml)
+Install Natural Shutter through HACS as a custom repository using the
+[README instructions](../README.md#hacs-custom-repository), then restart the test
+instance. Alternatively, use the README's manual ZIP installation steps.
+Merge [the simulated cover example](../examples/simulated_cover.yaml)
 into that instance's `configuration.yaml` and restart once more. It creates only
 an input-number helper and a template cover; there is no device action.
 This YAML is a test fixture, not a requirement for normal Natural Shutter setup.
@@ -91,6 +83,7 @@ Automated checks run against HA 2026.9.4. Device-link APIs were verified in HA
 2026.8.0's official source, but that minimum has not been runtime-tested. The YAML
 demo loads and runs in the automated suite; its
 interactive browser check remains separate. Browser rendering, physical devices,
-actual HACS installation, and official hassfest/HACS validation are checks the
-owner can perform later. Results from commands actually executed are recorded in
+an interactive HACS installation, and official hassfest/HACS validation were not
+performed as part of the local checks. The repository is available for HACS custom
+installation. Results from commands actually executed are recorded in
 [Validation](VALIDATION.md).

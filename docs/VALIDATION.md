@@ -3,6 +3,12 @@
 Validated locally on **2026-10-04**. No physical devices, production HA instance,
 Git metadata, or GitHub state were changed.
 
+The owner has since created
+[jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter),
+which is available for installation through HACS as a custom repository. The
+sections below record development history; references to publication preparation
+describe the repository's state at those earlier stages.
+
 ## Environment
 
 - Python 3.14.4
@@ -80,8 +86,9 @@ Checks performed after the metadata update:
   expected codeowner and planned documentation/issue URLs are configured, both
   READMEs use the planned repository URL, and the version has not changed.
 
-The repository has not been created. Documentation explicitly identifies the URLs
-as future publication addresses; no Git or GitHub write operations were performed.
+At that stage, the repository had not been created. Documentation identified the
+URLs as future publication addresses; no Git or GitHub write operations were
+performed. Repository creation has since been completed by the owner.
 
 ## Target alignment on integration load
 
@@ -204,9 +211,11 @@ code remain unchanged, and no Git or GitHub write operations were performed.
 ## Transferred GitHub Actions
 
 The local Manual Energy Metering reference contains one workflow file,
-`.github/workflows/validate.yml`, with HACS and Hassfest jobs. These jobs are now
-prepared as two workflow files for Natural Shutter:
+`.github/workflows/validate.yml`, with HACS and Hassfest jobs. These jobs were
+prepared during an earlier development stage as two workflow files for Natural Shutter:
 `.github/workflows/hacs.yml` and `.github/workflows/hassfest.yml`.
+These files are absent from the current checkout; this section records the earlier
+transfer and its checks.
 
 Both preserve pushes, pull requests, the daily 00:00 UTC schedule, manual dispatch,
 Ubuntu runners, and `contents: read` permissions. The source action references are
@@ -225,9 +234,9 @@ Executed checks:
 - `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .`: passed.
 
 The HACS action's documented `comment` input and the official workflow usage were
-checked. Hosted HACS/Hassfest validation and GitHub workflow dispatch were not run;
-the planned repository still needs to be published by the owner. Python runtime
-code and the integration version were not changed.
+checked. Hosted HACS/Hassfest validation and GitHub workflow dispatch were not run.
+The repository was still awaiting creation by the owner at that stage. Python
+runtime code and the integration version were not changed.
 
 Added files: `.github/workflows/hacs.yml` and `.github/workflows/hassfest.yml`.
 Updated documentation: `docs/TESTING.md`, `docs/PUBLISHING.md`, and
@@ -293,7 +302,38 @@ The integration version remains `1.0.0`. No interactive frontend or physical
 actuator test was performed. All changes remain local and unstaged; no Git or
 GitHub state was changed.
 
-## Remaining limits and publication work
+## Repository creation and HACS documentation
+
+On 2026-10-04, the owner reported that the GitHub repository had been created.
+The configured Git remote matches `jan-brinkmann/ha-natural-shutter`. Both READMEs
+now describe HACS custom repository installation, manual ZIP installation, and
+updates. Repository maintenance, testing, architecture, and changelog documentation
+reflect this state. The original `requirements.txt` specification has a current
+status note while retaining its historical instructions.
+
+References to absent workflow files were corrected in the current instructions;
+the earlier validation history is preserved. The integration manifest and
+`hacs.json` already contain the matching metadata and needed no changes.
+
+Changed files: `README.md`, `README.de.md`, `ARCHITECTURE.md`, `CHANGELOG.md`,
+`docs/PUBLISHING.md`, `docs/TESTING.md`, `docs/VALIDATION.md`, and `requirements.txt`.
+
+Executed checks:
+
+- `python3 scripts/validate_project.py`: passed.
+- A one-off Python documentation check: passed; 31 local links/images and heading
+  anchors, bilingual HACS instructions, current repository status, manifest URLs,
+  minimum HA version, and unchanged integration version were checked.
+- `git -c core.whitespace=cr-at-eol diff --check`: passed; the check accounts for
+  the original specification's CRLF line endings without changing Git configuration.
+- Official HACS custom repository and integration documentation was consulted.
+
+This update changes documentation only. Runtime code, version `1.0.0`, and minimum
+HA version `2026.8.0` are unchanged. No interactive HACS installation or hosted
+validator run was performed. All changes remain uncommitted and unstaged; no Git
+metadata or GitHub state was changed.
+
+## Remaining validation limits
 
 - HA 2026.8.0 provides the required device isolation APIs; the actual minimum
   runtime has not been tested. Full automated checks use HA 2026.9.4.
@@ -302,10 +342,11 @@ GitHub state was changed.
   were not exercised.
 - The requested README references and official HA/HACS documentation were reachable
   and consulted; links are collected in [Architecture](../ARCHITECTURE.md).
-- MIT licensing, codeowner `@jan-brinkmann`, and the planned repository,
-  documentation, and issue URLs are now configured. The GitHub repository does not
-  exist yet; repository setup and official validation remain publication tasks. See
-  [Publication preparation](PUBLISHING.md).
+- MIT licensing, codeowner `@jan-brinkmann`, and the repository, documentation, and
+  issue URLs are configured. The owner has created the GitHub repository, making
+  custom repository installation through HACS available. This local validation
+  record does not include an interactive HACS download or hosted validator results.
+  See [Repository and HACS maintenance](PUBLISHING.md).
 
 For reproducible installation and checks, see [Testing](TESTING.md) and the
 [German installation guide](../README.de.md).

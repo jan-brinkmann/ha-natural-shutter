@@ -69,28 +69,38 @@ are changed. The automated tests use HA 2026.9.4; the minimum version's registry
 APIs were checked, but its full runtime has not been tested. The bundled integration
 icon is displayed automatically.
 
-### HACS custom repository — after publication
+### HACS custom repository
 
-This project is currently local and unpublished. The planned repository is
+Natural Shutter is available through HACS as a custom repository from
 [jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter).
-**The repository does not exist yet.** Its address is already configured in the
-integration metadata; the following HACS steps apply after publication.
+HACS must already be installed and configured in Home Assistant.
 
 1. Open **HACS → ⋮ → Custom repositories**.
 2. Enter `https://github.com/jan-brinkmann/ha-natural-shutter` and select **Integration**.
-3. Download **Natural Shutter** and fully restart Home Assistant.
-4. Follow the setup instructions below.
+3. Click **Add** and close the custom repositories dialog.
+4. Search for **Natural Shutter** in HACS, open it, and click **Download**.
+5. Fully restart Home Assistant.
+6. Follow the setup instructions below to add your shutters.
 
-See the [publication checklist](docs/PUBLISHING.md) for remaining repository setup
-and validation work. No successful HACS installation or default-store inclusion is claimed.
+See the [official HACS instructions](https://www.hacs.xyz/docs/faq/custom_repositories/)
+for adding custom repositories. [GitHub releases are optional](https://www.hacs.xyz/docs/publish/integration/):
+without releases, HACS downloads the repository's default branch.
 
-### Manual installation — available now
+### Manual installation
 
-1. Copy the complete `custom_components/natural_shutter` folder into
+1. Download and extract the [repository ZIP](https://github.com/jan-brinkmann/ha-natural-shutter/archive/HEAD.zip).
+2. Copy the complete `custom_components/natural_shutter` folder into
    `<configuration_directory>/custom_components/natural_shutter` (usually `/config`
    on Home Assistant OS).
-2. Check that `manifest.json` is directly inside that folder.
-3. Fully restart Home Assistant.
+3. Check that `manifest.json` is directly inside that folder.
+4. Fully restart Home Assistant and follow the setup instructions below.
+
+### Updates
+
+Download available updates through HACS and fully restart Home Assistant. For a
+manual installation, replace the integration folder with the updated copy and
+restart. Existing entries can be retained: at load, the target adopts the current
+source position without movement and the saved buffer is retained.
 
 ## Setup and daily use
 

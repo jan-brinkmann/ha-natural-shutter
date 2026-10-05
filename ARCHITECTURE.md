@@ -229,15 +229,17 @@ References checked during implementation on 2026-10-04:
 - [HA 2026.8 device ownership](https://developers.home-assistant.io/blog/2026/07/21/device-registry-single-config-entry/),
   its [device registry](https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/helpers/device_registry.py),
   and [Linked devices endpoint](https://github.com/home-assistant/core/blob/2026.8.0/homeassistant/components/config/device_registry.py).
-- [HACS integration requirements](https://www.hacs.dev/docs/publish/integration/),
-  [repository metadata](https://hacs.dev/docs/publish/start/), and
+- [HACS integration requirements](https://www.hacs.xyz/docs/publish/integration/),
+  [repository metadata](https://www.hacs.xyz/docs/publish/start/),
+  [custom repository installation](https://www.hacs.xyz/docs/faq/custom_repositories/), and
   [HA brand images](https://developers.home-assistant.io/docs/core/integration/brand_images/).
 - README organization was informed by the reachable
   [Manual Energy Metering](https://github.com/jan-brinkmann/ha-manual-energy-metering)
   and [Shelly LED Control](https://github.com/jan-brinkmann/ha-shelly-led-control)
   projects. At the owner's subsequent request, the same MIT licensing and codeowner
-  were adopted, with `jan-brinkmann/ha-natural-shutter` configured as the planned
-  repository. It does not exist yet; no release claims were reused.
+  were adopted. The owner has since created
+  [jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter),
+  which is available for installation through HACS as a custom repository.
 
 ## Test strategy and known limits
 
@@ -262,8 +264,10 @@ with identifiers only, connections only, and offline states. They also cover lat
 device association, changed keys, source removal, child channels, device listener
 cleanup, and rejection of older HA versions before any storage or device writes.
 
-See [Testing](docs/TESTING.md) for commands and [Publishing](docs/PUBLISHING.md) for
-remaining repository setup and validation. HACS installation, remote HACS validation,
-hardware behavior, browser rendering, and the minimum HA runtime have not been
-tested. Source feature declarations and current positions must be trustworthy;
+See [Testing](docs/TESTING.md) for commands and
+[Repository and HACS maintenance](docs/PUBLISHING.md) for distribution details.
+The repository is available for HACS custom installation; an actual HACS download
+and remote HACS validation were not performed during local development. Hardware
+behavior, browser rendering, and the minimum HA runtime have not been tested.
+Source feature declarations and current positions must be trustworthy;
 the integration cannot detect firmware or calibration errors.

@@ -74,30 +74,41 @@ an Einstellungen oder Geräten abgelehnt. Die automatisierten Tests verwenden HA
 Laufzeitbetrieb jedoch noch nicht. Das mitgelieferte Integrationsicon wird automatisch
 angezeigt.
 
-### HACS als benutzerdefiniertes Repository — nach Veröffentlichung
+### HACS als benutzerdefiniertes Repository
 
-Das Projekt ist derzeit lokal und unveröffentlicht. Das geplante Repository heißt
-[jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter).
-**Das Repository existiert noch nicht.** Seine Adresse ist bereits in den
-Integrationsmetadaten eingetragen; die folgenden HACS-Schritte gelten nach der
-Veröffentlichung.
+Natural Shutter ist über HACS als benutzerdefiniertes Repository aus
+[jan-brinkmann/ha-natural-shutter](https://github.com/jan-brinkmann/ha-natural-shutter)
+installierbar. HACS muss in Home Assistant bereits installiert und eingerichtet sein.
 
 1. Öffne **HACS → ⋮ → Benutzerdefinierte Repositories**.
 2. Trage `https://github.com/jan-brinkmann/ha-natural-shutter` ein und wähle **Integration**.
-3. Lade **Natural Shutter** herunter und starte Home Assistant vollständig neu.
-4. Folge der Einrichtung unten.
+3. Klicke auf **Hinzufügen** und schließe den Dialog für benutzerdefinierte Repositories.
+4. Suche in HACS nach **Natural Shutter**, öffne den Eintrag und klicke auf **Herunterladen**.
+5. Starte Home Assistant vollständig neu.
+6. Folge der Einrichtung unten, um deine Rollläden hinzuzufügen.
 
-Die [Veröffentlichungsliste](docs/PUBLISHING.md) nennt die ausstehende
-Repository-Einrichtung und Validierung. Eine erfolgreiche HACS-Installation oder
-offizielle Aufnahme wird nicht behauptet.
+Die [offizielle HACS-Anleitung](https://www.hacs.xyz/docs/faq/custom_repositories/)
+beschreibt das Hinzufügen benutzerdefinierter Repositories.
+[GitHub-Releases sind optional](https://www.hacs.xyz/docs/publish/integration/):
+Ohne Releases lädt HACS den Standardbranch des Repositorys herunter.
 
-### Manuelle Installation — bereits möglich
+### Manuelle Installation
 
-1. Kopiere den vollständigen Ordner `custom_components/natural_shutter` nach
+1. Lade das [Repository als ZIP](https://github.com/jan-brinkmann/ha-natural-shutter/archive/HEAD.zip)
+   herunter und entpacke es.
+2. Kopiere den vollständigen Ordner `custom_components/natural_shutter` nach
    `<Konfigurationsverzeichnis>/custom_components/natural_shutter`.
    Unter Home Assistant OS beginnt der Pfad üblicherweise mit `/config`.
-2. Prüfe, dass `manifest.json` direkt in diesem Ordner liegt.
-3. Starte Home Assistant vollständig neu.
+3. Prüfe, dass `manifest.json` direkt in diesem Ordner liegt.
+4. Starte Home Assistant vollständig neu und folge der Einrichtung unten.
+
+### Aktualisierungen
+
+Lade verfügbare Updates über HACS herunter und starte Home Assistant vollständig
+neu. Bei manueller Installation ersetzt du den Integrationsordner durch die
+aktualisierte Kopie und startest neu. Bestehende Einträge können erhalten bleiben:
+Beim Laden übernimmt das Ziel die aktuelle Quellposition ohne Fahrt und der
+gespeicherte Puffer bleibt erhalten.
 
 ## Einrichtung und tägliche Verwendung
 
