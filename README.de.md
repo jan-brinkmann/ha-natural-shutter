@@ -27,6 +27,8 @@ Positionsbefehlen, beispielsweise aus Homematic IP, Shelly und anderen Integrati
 - Die Verfügbarkeit des Zielreglers folgt dem Quell-Cover; Wiederverbindung ohne Fahrt.
 - Alle hinzugefügten Rollläden stehen unter **Natural Shutter** im Reiter **Integrationen**.
 - Gegenseitige Navigation über **Verknüpfte Geräte** zwischen virtuellem Gerät und Aktor.
+- Aktivitätseinträge für gesendete Fahrbefehle und durch die Positions-/Pufferregel
+  unterdrückte Zieländerungen; optional Handy-Meldungen für unterdrückte Fahrten.
 
 ## Ziel-Position und Puffer
 
@@ -158,8 +160,61 @@ data:
 Über **Neu konfigurieren** im Menü des Eintrags kannst du den Namen ändern oder
 eine fehlende Quelle ausdrücklich ersetzen. Dabei wird der Eintrag neu geladen:
 Der Puffer bleibt erhalten, das Ziel übernimmt eine gültige aktuelle Quellposition
-ohne Fahrt. Ein Options Flow ist nicht erforderlich, da die beiden
-Betriebseinstellungen direkt als Regler vorliegen.
+ohne Fahrt. Ziel und Puffer stellst du weiterhin direkt über die Regler ein.
+
+### Fahrentscheidungen nachvollziehen
+
+Wenn du den normalisierten Zielwert änderst und die bekannte Positions-/Pufferregel
+keinen Fahrbefehl zulässt, erscheint ein Eintrag in **Aktivität** am Zielregler und
+am virtuellen Natural-Shutter-Gerät. Die Meldung unterscheidet **Abstand kleiner
+als Puffer** und **Zielposition bereits erreicht**. Der neue Zielwert bleibt gespeichert.
+
+Wenn die Integration einen Fahrbefehl auslöst, erscheint zusätzlich der Eintrag
+**Fahrbefehl gesendet**. Er entsteht nach dem erfolgreichen Aufruf von
+`cover.set_cover_position` und enthält dieselben Werte, mit der Istposition vor
+dem Befehl. Dafür wird keine Handy-Benachrichtigung gesendet. Der Eintrag bestätigt
+den erfolgreichen Aktionsaufruf; die tatsächliche Fahrt und das Erreichen der
+Zielposition werden weiterhin nicht überwacht.
+
+Für die Meldung einer unterdrückten Fahrt auf dem Handy öffne **Einstellungen → Geräte & Dienste →
+Natural Shutter → Konfigurieren** beim gewünschten Rollladeneintrag. Wähle unter
+**Benachrichtigungsdienst des Handys** dessen `notify.mobile_app_…`-Dienst.
+Das Handy muss mit der Home Assistant Companion App an deiner HA-Instanz angemeldet
+sein und Benachrichtigungen erlauben; die App stellt dafür einen
+[Benachrichtigungsdienst](https://companion.home-assistant.io/docs/notifications/notifications-basic/)
+bereit. Ohne registriertes Handy bietet die Auswahl nur **Push-Nachrichten deaktiviert**.
+Push-Nachrichten sind zunächst deaktiviert und lassen sich pro Rollladen aktivieren,
+wechseln oder wieder abschalten. Die Änderung gilt sofort, ohne Reload, Positionsabgleich
+oder Fahrt. Die Aktivitätseinträge entstehen auch bei deaktivierten Push-Nachrichten.
+
+Aktivitätseinträge und Unterdrückungsmeldungen enthalten Datum und Uhrzeit in der HA-Zeitzone einschließlich
+UTC-Offset, Rollladenname und Quell-Entity-ID, den vorherigen und neuen Zielwert,
+die Istposition auf beiden Skalen, das HA-Ziel, den Abstand und den Puffer in
+Prozentpunkten (`pp`). Die Sprache folgt der in HA konfigurierten Sprache
+(Deutsch oder Englisch, mit englischer Rückfallebene).
+
+Beispiel: Zieländerung von 30 auf 70 %, HA-Istposition 35 %, Puffer 10 pp:
+
+```text
+Wohnzimmer: Keine Fahrt
+2026-10-05 14:34:56+02:00 · cover.wohnzimmer: Abstand kleiner als Puffer.
+Ziel 30 → 70 %, Ist 65 % (HA 35 %), HA-Ziel 30 %, Abstand 5 pp, Puffer 10 pp.
+```
+
+Bei einem Abstand genau gleich dem Puffer wird wie bisher gefahren und ein
+**Fahrbefehl gesendet**-Eintrag erzeugt. Derselbe normalisierte Zielwert,
+Pufferänderungen, externe Bewegungen, Start und Reload erzeugen keine
+Fahrentscheidungseinträge oder Handy-Meldungen.
+Nicht verfügbare Quellen, ungültige Positionen und fehlgeschlagene Fahrbefehle
+behalten ihre bisherigen Aktions- und Protokollmeldungen. Es wird keine spätere
+physische Fahrt oder Positionsrückmeldung überwacht.
+
+Die Aktivitätsanzeige benötigt HA **Aktivität/Logbook** und **Recorder**; deren
+Filter und Aufbewahrungsdauer gelten auch für diese Einträge. Ein Standard-Dashboard
+kann sie mit der unten verlinkten Aktivitätskarte anzeigen. Wenn der gewählte
+Handy-Dienst fehlt oder eine Push-Nachricht fehlschlägt, bleibt der Aktivitätseintrag
+erhalten und HA protokolliert den Benachrichtigungsfehler. Das Ziel und die Fahrentscheidung
+bleiben dabei erhalten; es gibt keinen automatischen Wiederholungsversuch.
 
 Siehe [Standard-Dashboard-Beispiele](examples/dashboard.yaml),
 [lokale Testanleitung](docs/TESTING.md) und [Architektur auf Englisch](ARCHITECTURE.md).

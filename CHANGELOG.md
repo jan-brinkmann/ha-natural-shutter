@@ -7,6 +7,11 @@ Initial version, available through HACS as a custom repository.
 - Manual selection of existing position-capable covers with duplicate prevention.
 - Independent persistent target and buffer sliders per shutter.
 - Inverted target scale and inclusive minimum deviation buffer.
+- Activity entries for changed targets suppressed by the position/buffer rule,
+  with localized decision values and local timestamps; optional per-shutter
+  Companion App phone notifications configured without reload or movement.
+- Additional Activity entries after successful cover position commands, with
+  decision values and local timestamps, without phone notifications.
 - Target alignment with the live source position at each load without movement;
   the buffer and offline fallback target remain saved.
 - Commands only on explicit changes of the normalized target.

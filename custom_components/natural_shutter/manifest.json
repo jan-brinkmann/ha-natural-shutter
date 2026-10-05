@@ -1,6 +1,7 @@
 {
   "domain": "natural_shutter",
   "name": "Natural Shutter",
+  "after_dependencies": ["logbook", "notify"],
   "codeowners": ["@jan-brinkmann"],
   "config_flow": true,
   "dependencies": ["cover"],
