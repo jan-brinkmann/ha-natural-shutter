@@ -20,15 +20,38 @@ Positionsbefehlen, beispielsweise aus Homematic IP, Shelly und anderen Integrati
 - Jeden Rollladen manuell über die HA-Oberfläche hinzufügen; keine automatische Aufnahme.
 - Zwei unabhängige Schieberegler pro Rollladen: **Ziel-Position** und **Puffer**.
 - Zwei numerische Verlaufssensoren: **Ziel-Position Verlauf** und **Puffer Verlauf**.
+- Pro Gerät ein gespeicherter Schalter **Aktiviert** und ein Binärsensor **Aktiviert Verlauf**.
 - Bei Start und Reload übernimmt das Ziel die Istposition ohne Fahrbefehl;
   der Puffer bleibt erhalten.
 - Deutsche und englische Einrichtung, Entitätsnamen und Aktionsfehlermeldungen.
 - Vorhandene Cover-Entitäten und Herstellerintegrationen werden weiter verwendet.
-- Die Verfügbarkeit des Zielreglers folgt dem Quell-Cover; Wiederverbindung ohne Fahrt.
+- Bei aktiviertem Gerät folgt die Verfügbarkeit des Zielreglers dem Quell-Cover; Wiederverbindung ohne Fahrt.
 - Alle hinzugefügten Rollläden stehen unter **Natural Shutter** im Reiter **Integrationen**.
 - Gegenseitige Navigation über **Verknüpfte Geräte** zwischen virtuellem Gerät und Aktor.
 - Aktivitätseinträge für gesendete Fahrbefehle und durch die Positions-/Pufferregel
   unterdrückte Zieländerungen; optional Handy-Meldungen für unterdrückte Fahrten.
+
+## Ein Gerät aktivieren oder deaktivieren
+
+Jedes neu angelegte virtuelle Gerät besitzt einen eigenen Schalter **Aktiviert**,
+der anfangs ausgeschaltet ist. Der Zustand wird unabhängig pro Instanz gespeichert und nach
+Neustart, Reload und Neukonfiguration wiederhergestellt. Bestehende Geräte ohne
+gespeicherten Aktivierungszustand starten aktiviert.
+
+Bei ausgeschaltetem Schalter bleiben Ziel und Puffer bedienbar, auch bei einer
+nicht verfügbaren Quelle. Jede tatsächliche Zieländerung erzeugt einen
+Aktivitätseintrag mit **Keine Fahrt, weil Natural Shutter deaktiviert ist**.
+Es werden unabhängig vom Puffer keine Fahrbefehle und keine Handy-Benachrichtigungen
+gesendet. Eine fehlende Istposition erscheint als unbekannt. Der Binärsensor
+**Aktiviert Verlauf** zeichnet Ein/Aus-Wechsel über Recorder auf, zusätzlich zu
+den beiden numerischen Verlaufssensoren.
+
+Das Wiedereinschalten löst keine Fahrt aus und holt kein gespeichertes Ziel nach;
+erst eine neue Zieländerung kann einen Fahrbefehl auslösen. Das Ausschalten stoppt
+keinen bereits an die Quelle gesendeten Befehl. Direkte Quell-Cover-Aktionen und
+externe Bedienungen bleiben möglich. Beim Laden übernimmt das Ziel weiterhin eine
+gültige Istposition ohne Fahrt, auch bei deaktiviertem Gerät. Der gespeicherte
+Aktivierungszustand und Puffer bleiben erhalten.
 
 ## Ziel-Position und Puffer
 
@@ -43,7 +66,8 @@ erneuten Laden erfolgt wieder der Abgleich mit der Istposition.
 gewünschter Position. Eine Fahrt wird nur ausgelöst, wenn du das Ziel ausdrücklich
 änderst, der Rollladen davon abweicht und der Abstand mindestens dem Puffer
 entspricht. Bei Puffer 0 sendet jede Zieländerung mit abweichender Istposition einen
-Befehl. Die Änderung des Puffers selbst löst niemals eine Fahrt aus.
+Befehl, sofern das Gerät aktiviert ist. Die Änderung des Puffers selbst löst niemals
+eine Fahrt aus.
 
 Beide Regler reichen von 0 bis 100 %, Schrittweite 1. Dezimale Aktionswerte werden
 auf ganze Prozent gerundet, bei einer Hälfte aufwärts. Ungültige Werte und Werte
@@ -117,7 +141,7 @@ gespeicherte Puffer bleibt erhalten.
 1. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen → Natural Shutter**.
 2. Wähle ein vorhandenes Cover. Vergib optional einen gut unterscheidbaren Namen.
 3. Wiederhole die Einrichtung für jeden weiteren Rollladen. Jeder Eintrag erhält
-   ein eigenes virtuelles Gerät mit vier Entitäten; doppelte Quellen werden abgelehnt.
+   ein eigenes virtuelles Gerät mit sechs Entitäten; doppelte Quellen werden abgelehnt.
 
 Alle Einträge findest du gemeinsam unter **Einstellungen → Geräte & Dienste →
 Integrationen → Natural Shutter**. Auf der Seite eines virtuellen Geräts führt
@@ -167,7 +191,9 @@ ohne Fahrt. Ziel und Puffer stellst du weiterhin direkt über die Regler ein.
 Wenn du den normalisierten Zielwert änderst und die bekannte Positions-/Pufferregel
 keinen Fahrbefehl zulässt, erscheint ein Eintrag in **Aktivität** am Zielregler und
 am virtuellen Natural-Shutter-Gerät. Die Meldung unterscheidet **Abstand kleiner
-als Puffer** und **Zielposition bereits erreicht**. Der neue Zielwert bleibt gespeichert.
+als Puffer** und **Zielposition bereits erreicht**. Deaktivierte Geräte melden
+stattdessen **Keine Fahrt, weil Natural Shutter deaktiviert ist**, ohne
+Handy-Benachrichtigungen. Der neue Zielwert bleibt gespeichert.
 
 Wenn die Integration einen Fahrbefehl auslöst, erscheint zusätzlich der Eintrag
 **Fahrbefehl gesendet**. Er entsteht nach dem erfolgreichen Aufruf von
@@ -201,12 +227,12 @@ Wohnzimmer: Keine Fahrt
 Ziel 30 → 70 %, Ist 65 % (HA 35 %), HA-Ziel 30 %, Abstand 5 pp, Puffer 10 pp.
 ```
 
-Bei einem Abstand genau gleich dem Puffer wird wie bisher gefahren und ein
+Bei aktiviertem Gerät und einem Abstand genau gleich dem Puffer wird gefahren und ein
 **Fahrbefehl gesendet**-Eintrag erzeugt. Derselbe normalisierte Zielwert,
 Pufferänderungen, externe Bewegungen, Start und Reload erzeugen keine
 Fahrentscheidungseinträge oder Handy-Meldungen.
-Nicht verfügbare Quellen, ungültige Positionen und fehlgeschlagene Fahrbefehle
-behalten ihre bisherigen Aktions- und Protokollmeldungen. Es wird keine spätere
+Bei aktiviertem Gerät behalten nicht verfügbare Quellen, ungültige Positionen und
+fehlgeschlagene Fahrbefehle ihre bisherigen Aktions- und Protokollmeldungen. Es wird keine spätere
 physische Fahrt oder Positionsrückmeldung überwacht.
 
 Die Aktivitätsanzeige benötigt HA **Aktivität/Logbook** und **Recorder**; deren
@@ -225,13 +251,14 @@ Siehe [Standard-Dashboard-Beispiele](examples/dashboard.yaml),
   Bewegungen, Sensoraktualisierungen, Pufferänderungen und das erneute Setzen
   desselben normalisierten Zielwerts lösen keine Fahrt aus. Es gibt keine
   automatische Nachregelung auf das gespeicherte Ziel.
-- Der Zielregler ist nicht verfügbar, wenn die Quelle fehlt, unbekannt, nicht
-  verfügbar, deaktiviert oder nur als wiederhergestellter Platzhalter vorhanden ist.
+- Bei aktiviertem Gerät ist der Zielregler nicht verfügbar, wenn die Quelle fehlt,
+  unbekannt, nicht verfügbar, deaktiviert oder nur als wiederhergestellter Platzhalter vorhanden ist.
   Ziel-Aktionen werden dann von HA übersprungen, ohne einen neuen Wert zu speichern.
   Bei Wiederverbindung erscheint das gespeicherte Ziel ohne Fahrt oder erneuten
-  Positionsabgleich. Puffer und Verlaufssensoren bleiben verfügbar.
-- Fällt die Quelle während des Speicherns einer bereits angenommenen Zieländerung
-  aus oder liefert sie eine ungültige Istposition, bleibt das neue Ziel gespeichert.
+  Positionsabgleich. Bei deaktiviertem Gerät bleibt das Ziel unabhängig von der
+  Quelle bedienbar. Schalter, Puffer und Verlaufssensoren bleiben verfügbar.
+- Fällt bei aktiviertem Gerät die Quelle während des Speicherns einer bereits
+  angenommenen Zieländerung aus oder liefert sie eine ungültige Istposition, bleibt das neue Ziel gespeichert.
   Die übersprungene Aktion wird in Oberfläche/Aktionsverlauf und HA-Protokoll
   gemeldet. Nichts wird vorgemerkt. Auch fehlgeschlagene Cover-Aktionen behalten das
   Ziel und werden nicht automatisch wiederholt. Für einen neuen Versuch musst du
@@ -248,7 +275,7 @@ Siehe [Standard-Dashboard-Beispiele](examples/dashboard.yaml),
 ## Entfernen
 
 Entferne den gewünschten Eintrag unter **Einstellungen → Geräte & Dienste →
-Natural Shutter**. Nur seine vier Entitäten und gespeicherten Einstellungen werden
+Natural Shutter**. Nur seine sechs Entitäten und gespeicherten Einstellungen werden
 entfernt. Das Quell-Cover und andere Zuordnungen bleiben erhalten. Recorder-Verlauf
 unterliegt weiterhin dessen Aufbewahrung. Nachdem alle Einträge entfernt wurden,
 kannst du die Integration über HACS deinstallieren oder ihren Ordner manuell löschen

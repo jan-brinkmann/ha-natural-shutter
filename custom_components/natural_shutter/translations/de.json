@@ -27,7 +27,7 @@
     "step": {
       "init": {
         "title": "Benachrichtigungen bei unterdrückter Fahrt",
-        "description": "Wähle ein Handy mit registrierter Home Assistant Companion App oder deaktiviere Push-Nachrichten. Eine durch die Positions-/Pufferregel unterdrückte Zieländerung erzeugt immer einen Aktivitätseintrag. Diese Option gilt sofort, ohne erneutes Laden oder Bewegen des Rollladens.",
+        "description": "Wähle ein Handy mit registrierter Home Assistant Companion App oder deaktiviere Push-Nachrichten. Eine durch die Positions-/Pufferregel unterdrückte Zieländerung erzeugt immer einen Aktivitätseintrag. Deaktivierte Natural-Shutter-Geräte protokollieren weiterhin Zieländerungen, senden aber keine Handy-Benachrichtigungen. Diese Option gilt sofort, ohne erneutes Laden oder Bewegen des Rollladens.",
         "data": {"notification_service": "Benachrichtigungsdienst des Handys"}
       }
     },
@@ -43,9 +43,17 @@
     "movement_decision_message": "{timestamp} · {source}: {reason}. Ziel {previous_target} → {target} %, Ist {actual} % (HA {position} %), HA-Ziel {ha_target} %, Abstand {distance} pp, Puffer {buffer} pp.",
     "command_sent": "Fahrbefehl an Quell-Rollladen gesendet",
     "already_at_target": "Zielposition bereits erreicht",
-    "below_buffer": "Abstand kleiner als Puffer"
+    "below_buffer": "Abstand kleiner als Puffer",
+    "integration_disabled": "Keine Fahrt, weil Natural Shutter deaktiviert ist",
+    "position_unknown": "unbekannt"
   },
   "entity": {
+    "switch": {
+      "enabled": {"name": "Aktiviert"}
+    },
+    "binary_sensor": {
+      "enabled": {"name": "Aktiviert Verlauf"}
+    },
     "number": {
       "target_position": {"name": "Ziel-Position"},
       "buffer": {"name": "Puffer"}

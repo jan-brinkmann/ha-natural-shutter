@@ -4,7 +4,8 @@
 
 Natural Shutter is a config-entry-based device integration with the domain
 `natural_shutter`. One manually selected cover corresponds to one config entry,
-one owned virtual device, two number entities, and two sensor entities. There is
+one owned virtual device, two number entities, two numeric sensor entities, one
+activation switch, and one activation binary sensor. There is
 no discovery, YAML configuration for mappings, proxy cover, custom service, custom
 card, or historical database. The integration has no third-party runtime packages.
 
@@ -19,12 +20,17 @@ card, or historical database. The integration has no third-party runtime package
 | `entity.py` | Stable entity IDs, virtual device grouping, subscription cleanup |
 | `number.py` | Target and buffer sliders; explicit `async_set_native_value` |
 | `sensor.py` | Numeric saved-setting history sensors |
+| `switch.py` | Persistent per-mapping activation, without target replay |
+| `binary_sensor.py` | Read-only activation history for Recorder |
 | `__init__.py` | Setup, unload, and mapping-storage removal |
 
 Config-entry data contains `source_entity_id`, optional `source_registry_id`, and
 `initial_target`. The entry title is the user-selected label or source friendly
 name. A `ShutterController` is assigned to typed `ConfigEntry.runtime_data`.
 The current settings are an integer dictionary: `target_position` and `buffer`.
+The controller also owns a boolean `enabled`, initially false for new mappings.
+Existing records without this field default to true. All three settings share one
+atomic storage record and one write lock per mapping.
 Config-entry options hold `notification_service`: a registered `mobile_app_*`
 service in the `notify` domain, or an empty string for disabled push. Existing
 entries without this option default to disabled push. An Options Flow lists only
@@ -66,7 +72,7 @@ entity ID; after a rename it needs manual reconfiguration. Such an ID can be reu
 by HA, which is an unavoidable identity limitation for unregistered sources.
 
 Generated unique IDs combine the mapping's immutable `entry_id`, platform kind,
-and setting key. A separate virtual device groups all four entities under the
+and setting key. A separate virtual device groups all six entities under the
 chosen shutter label. This avoids writing metadata into the manufacturer's device
 or claiming ownership of its entities. `has_entity_name` and translation keys give
 distinct names to sliders and sensors. Reconfiguring the label updates device naming
@@ -104,7 +110,10 @@ of zero silently.
 
 The config flow snapshots an initial fallback target: the rounded value of
 `100 - current_position`, or zero if no valid live position exists. Buffer starts
-at zero. A missing settings file initializes from this snapshot.
+at zero, with activation disabled. A missing settings file initializes from this
+snapshot. Older records without `enabled` load as enabled and are saved with the
+new field using the existing storage schema. Explicit non-boolean activation
+values are rejected. Reload and source reconfiguration retain activation.
 
 On every entry load, including startup, reload, and reconfiguration, the controller
 reads the resolved source's current position. A valid live value replaces the target
@@ -131,7 +140,9 @@ by explicit UI or action writes such as `number.set_value`. The controller valid
 and normalizes the input, then compares it to the saved value under its write lock.
 Equal normalized values return without a save, notification, or command.
 
-The buffer setter only saves and publishes its setting. Sensors only read stored
+The buffer setter only saves and publishes its setting. The activation setter
+also saves and publishes, refreshing target availability without dispatch or
+replay. Sensors only read stored
 values. Setup, reconfiguration, unload, restart, restoration, registry events,
 availability changes, actual position reports, external movements, and sensor
 updates have no path to command dispatch. There is no movement timer, retry queue, feedback
@@ -147,14 +158,21 @@ positions are validated but retain fractional precision.
 
 For a changed normalized target `x`, HA target `t = 100 - x`, valid live source
 position `a`, and saved buffer `b`, compute `d = abs(a - t)`.
-Send one `cover.set_cover_position` action with `position: t` iff
+While enabled, send one `cover.set_cover_position` action with `position: t` iff
 `d > 0 and d >= b`. Buffer is a distance in percentage points and never offsets the
 destination. Both directions, equality at the threshold, and endpoints follow this
 same rule. The target is saved even when the buffer suppresses movement.
 
 ## Position-decision Activity and suppression notifications
 
-Only an accepted changed normalized target with valid source data reaches reporting.
+Deactivated mappings save every accepted changed normalized target and report
+**No movement because Natural Shutter is deactivated** before source validation or
+buffer comparison. They never call a cover service or notify a phone. A missing,
+unavailable, invalid, restored, or removed source is allowed for these writes;
+unavailable position and distance fields are rendered as localized unknown values.
+Reactivation does not report or replay a saved target.
+
+For enabled mappings, only an accepted changed normalized target with valid source data reaches reporting.
 The existing `d == 0 or d < b` branch produces one localized Activity entry, with
 distinct reasons for an already reached target and a difference below the buffer.
 An equality at the nonzero buffer threshold dispatches the existing cover command
@@ -182,7 +200,7 @@ Recorder control visibility, filtering, and retention; no custom history is stor
 The manifest orders setup after Logbook and Notify when these optional integrations
 are configured, without requiring them for slider operation.
 
-For suppressed decisions, Activity is recorded before sending an optional `notify.mobile_app_*` message with
+For enabled suppressed decisions, Activity is recorded before sending an optional `notify.mobile_app_*` message with
 the same title, body, and context. The service is rechecked at dispatch. A missing
 service, notification error, or notification timeout is logged without raising a
 new target-write error or losing the Activity event. Blocking notification dispatch
@@ -192,15 +210,16 @@ messages are neither queued nor retried.
 
 ## Availability and error handling
 
-The target number's `available` property follows the resolved source's live state
+While enabled, the target number's `available` property follows the resolved source's live state
 and registry status. A missing, unknown, unavailable, restored, or disabled source
 makes the target unavailable. HA skips actions targeting this unavailable number,
-leaving its saved value unchanged. The buffer and both history sensors remain
+leaving its saved value unchanged. While deactivated, the target stays editable
+independently of source availability. The activation switch, buffer, and all three history sensors remain
 available. Reconnection republishes the saved target without alignment or movement.
 Invalid numeric positions and lost position support on an otherwise live source
 are handled when an explicit target write is dispatched.
 
-An accepted changed target is saved first. If the source disappears during saving,
+An accepted changed target is saved first. While enabled, if the source disappears during saving,
 has an invalid actual position, becomes disabled, or loses position support, the
 command path reports a warning and translated action error. The saved setting
 remains in sensor history, even if the target slider is now unavailable. No action
@@ -218,8 +237,10 @@ between validation and dispatch; its integration determines the resulting error.
 
 One `asyncio.Lock` per mapping covers comparison, saving, publishing, source
 validation, the blocking cover action, and decision reporting. Requests are processed in lock acquisition
-order. An older command cannot overtake a newer one. Buffer changes join the same
-sequence, giving each target decision a consistent saved buffer. Different mappings
+order. An older command cannot overtake a newer one. Buffer and activation changes
+join the same sequence, giving each target decision a consistent saved buffer and
+activation state. Deactivation waits for an in-flight action/report to finish;
+it does not cancel previously dispatched commands. Different mappings
 operate independently. Ordered writes are not debounced: each distinct explicit
 target may dispatch its own command. A slow source action delays later writes for
 that mapping. A suppressed write may also wait up to ten seconds for the selected
@@ -301,7 +322,12 @@ References checked for suppression reporting on 2026-10-05:
 
 ## Test strategy and known limits
 
-The test suite loads the real integration, config flows, number/sensor platforms,
+Activation references checked on 2026-10-05:
+
+- [Switch entities](https://developers.home-assistant.io/docs/core/entity/switch/) and
+  [binary sensor entities](https://developers.home-assistant.io/docs/core/entity/binary-sensor/).
+
+The test suite loads the real integration, config flows, number/sensor/switch/binary-sensor platforms,
 registry machinery, translations, and cover service in isolated HA instances.
 Simulated `CoverEntity` objects record position commands and expose controlled
 positions, availability, failures, and action gates. Tests explicitly assert the
@@ -331,6 +357,12 @@ Activity queries against isolated SQLite. Successful commands are checked for
 localized snapshots, context and rename association, no phone notification, and
 logging only after service success, retaining the actual position before dispatch.
 No phone receives real messages in tests.
+
+Activation tests verify per-device independence, disabled target and buffer edits,
+offline availability, localized disabled decisions, no phone calls, no target
+replay on enable, legacy storage defaults, invalid activation data, failed saves,
+write ordering, reload, and restoration in a fresh HA instance. Recorder queries
+also retrieve activation on/off transitions and disabled Activity entries.
 
 See [Testing](docs/TESTING.md) for commands and
 [Repository and HACS maintenance](docs/PUBLISHING.md) for distribution details.

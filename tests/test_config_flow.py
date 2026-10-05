@@ -15,14 +15,15 @@ from custom_components.natural_shutter.const import (
     CONF_SOURCE,
     CONF_SOURCE_REGISTRY_ID,
     DOMAIN,
+    ENABLED,
     TARGET,
 )
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, set_enabled, set_setting, setting_entity_id
 
 
 async def test_manual_selection_and_duplicate(hass, cover, add_shutter):
-    """Create exactly four entities manually and reject the same source twice."""
+    """Create exactly six entities manually and reject the same source twice."""
     form = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
@@ -35,11 +36,19 @@ async def test_manual_selection_and_duplicate(hass, cover, add_shutter):
     entry = result["result"]
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
     assert sorted(entity.domain for entity in entities) == [
+        "binary_sensor",
         "number",
         "number",
         "sensor",
         "sensor",
+        "switch",
     ]
+    assert hass.states.get(
+        setting_entity_id(hass, entry, "switch", ENABLED)
+    ).state == "off"
+    assert hass.states.get(
+        setting_entity_id(hass, entry, "binary_sensor", ENABLED)
+    ).state == "off"
     assert (
         entry.data[CONF_SOURCE_REGISTRY_ID]
         == er.async_get(hass).async_get(cover.entity_id).id
@@ -99,8 +108,9 @@ async def test_initial_unavailable(hass, cover, add_shutter):
 
 
 async def test_reconfigure_aligns_target_and_preserves_buffer(hass, cover, add_shutter):
-    """Align with the replacement source while retaining the buffer and entity IDs."""
+    """Align to a replacement while retaining buffer, activation, and entity IDs."""
     entry = await add_shutter(cover)
+    await set_enabled(hass, entry, False)
     await set_setting(hass, entry, BUFFER, 15)
     replacement = SimulatedCover("Bedroom", 10)
     await hass.data["cover"].async_add_entities([replacement])
@@ -108,6 +118,9 @@ async def test_reconfigure_aligns_target_and_preserves_buffer(hass, cover, add_s
         setting_entity_id(hass, entry, kind, key)
         for kind in ("number", "sensor")
         for key in (TARGET, BUFFER)
+    } | {
+        setting_entity_id(hass, entry, kind, ENABLED)
+        for kind in ("switch", "binary_sensor")
     }
     form = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
@@ -120,11 +133,15 @@ async def test_reconfigure_aligns_target_and_preserves_buffer(hass, cover, add_s
     assert entry.title == "New label"
     assert entry.data[CONF_SOURCE] == replacement.entity_id
     assert entry.runtime_data.values == {TARGET: 90, BUFFER: 15}
+    assert entry.runtime_data.enabled is False
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
     assert old_ids == {
         setting_entity_id(hass, entry, kind, key)
         for kind in ("number", "sensor")
         for key in (TARGET, BUFFER)
+    } | {
+        setting_entity_id(hass, entry, kind, ENABLED)
+        for kind in ("switch", "binary_sensor")
     }
     assert cover.commands == replacement.commands == []
 
@@ -197,7 +214,7 @@ async def test_no_automatic_mapping_of_new_covers(hass, cover, add_shutter):
     await hass.async_block_till_done()
     assert hass.config_entries.async_entries(DOMAIN) == [entry]
     assert (
-        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 4
+        len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 6
     )
     assert cover.commands == new_cover.commands == []
 

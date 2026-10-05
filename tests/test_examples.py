@@ -66,5 +66,10 @@ def test_dashboard_example_uses_standard_cards():
         "history-graph",
         "logbook",
     ]
-    assert len(card["cards"][0]["entities"]) == len(card["cards"][1]["entities"]) == 2
+    assert len(card["cards"][0]["entities"]) == len(card["cards"][1]["entities"]) == 3
+    assert card["cards"][0]["entities"][0]["entity"] == "switch.living_room_enabled"
+    assert (
+        card["cards"][1]["entities"][0]["entity"]
+        == "binary_sensor.living_room_enabled_history"
+    )
     assert card["cards"][2]["entities"] == ["number.living_room_target_position"]

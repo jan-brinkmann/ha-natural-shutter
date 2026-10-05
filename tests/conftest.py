@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
-from custom_components.natural_shutter.const import CONF_SOURCE, DOMAIN
+from custom_components.natural_shutter.const import CONF_SOURCE, DOMAIN, ENABLED
 
 
 class SimulatedCover(CoverEntity):
@@ -72,8 +72,10 @@ async def cover(hass: HomeAssistant) -> SimulatedCover:
 def add_shutter(hass: HomeAssistant) -> Callable[..., Coroutine[Any, Any, ConfigEntry]]:
     """Return a helper that creates an entry using the actual manual config flow."""
 
-    async def add(entity: SimulatedCover, name: str | None = None) -> ConfigEntry:
-        """Create a mapping and wait until its numbers and sensors are loaded."""
+    async def add(
+        entity: SimulatedCover, name: str | None = None, enabled: bool = True
+    ) -> ConfigEntry:
+        """Create a mapping; enable it by default for command behavior tests."""
         data = {CONF_SOURCE: entity.entity_id}
         if name is not None:
             data[CONF_NAME] = name
@@ -83,7 +85,10 @@ def add_shutter(hass: HomeAssistant) -> Callable[..., Coroutine[Any, Any, Config
         assert result["type"] == "create_entry", result
         await hass.async_block_till_done()
         assert entity.commands == []
-        return result["result"]
+        entry = result["result"]
+        if enabled:
+            await set_enabled(hass, entry, True)
+        return entry
 
     return add
 
@@ -107,6 +112,17 @@ async def set_setting(
         "number",
         "set_value",
         {"entity_id": setting_entity_id(hass, entry, "number", key), "value": value},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+
+async def set_enabled(hass: HomeAssistant, entry: ConfigEntry, enabled: bool) -> None:
+    """Write through the activation switch and wait for history publication."""
+    await hass.services.async_call(
+        "switch",
+        "turn_on" if enabled else "turn_off",
+        {"entity_id": setting_entity_id(hass, entry, "switch", ENABLED)},
         blocking=True,
     )
     await hass.async_block_till_done()

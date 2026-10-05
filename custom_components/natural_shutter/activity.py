@@ -23,15 +23,18 @@ async def async_report_decision(
     source: str,
     previous_target: int,
     target: int,
-    position: float,
+    position: float | None,
     buffer: int,
     context: Context | None,
     command_sent: bool,
+    enabled: bool = True,
 ) -> None:
-    """Log a decision snapshot; only suppressed decisions may notify a phone.
+    """Log a decision snapshot; only enabled suppressed decisions notify a phone.
 
     Set command_sent only after a successful cover service call; source position
     and buffer describe the decision before dispatch, not later physical travel.
+    Disabled decisions take precedence over buffer reasons and allow a missing
+    position, displayed as unknown. They never send a phone notification.
     Associate the Activity entry with this mapping's target number, following
     entity renames. Use HA's local time and preserve the originating context.
     Notification failures are logged and never change settings or trigger a
@@ -43,9 +46,11 @@ async def async_report_decision(
     )
     prefix = f"component.{DOMAIN}.common."
     ha_target = 100 - target
-    distance = abs(position - ha_target)
+    distance = abs(position - ha_target) if position is not None else None
     reason = (
-        "command_sent"
+        "integration_disabled"
+        if not enabled
+        else "command_sent"
         if command_sent
         else "already_at_target"
         if distance == 0
@@ -61,10 +66,22 @@ async def async_report_decision(
         reason=translations[f"{prefix}{reason}"],
         previous_target=previous_target,
         target=target,
-        actual=f"{100 - position:g}",
-        position=f"{position:g}",
+        actual=(
+            f"{100 - position:g}"
+            if position is not None
+            else translations[f"{prefix}position_unknown"]
+        ),
+        position=(
+            f"{position:g}"
+            if position is not None
+            else translations[f"{prefix}position_unknown"]
+        ),
         ha_target=ha_target,
-        distance=f"{distance:g}",
+        distance=(
+            f"{distance:g}"
+            if distance is not None
+            else translations[f"{prefix}position_unknown"]
+        ),
         buffer=buffer,
     )
     entity_id = er.async_get(hass).async_get_entity_id(
@@ -73,7 +90,7 @@ async def async_report_decision(
     async_log_entry(
         hass, title, message, domain=DOMAIN, entity_id=entity_id, context=context
     )
-    if command_sent:
+    if command_sent or not enabled:
         return
     service = entry.options.get(CONF_NOTIFICATION_SERVICE)
     if not service:

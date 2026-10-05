@@ -1,4 +1,4 @@
-# Paste this card into a manual dashboard card; replace all four entity IDs.
+# Paste this card into a manual dashboard card; replace all six entity IDs.
 # Entity IDs depend on the setup language and user-selected shutter name.
 type: vertical-stack
 cards:
@@ -6,6 +6,8 @@ cards:
     title: Natural Shutter — Living room
     show_header_toggle: false
     entities:
+      - entity: switch.living_room_enabled
+        name: Natural Shutter enabled
       - entity: number.living_room_target_position
         name: Target position (0% open, 100% closed)
       - entity: number.living_room_buffer
@@ -14,6 +16,8 @@ cards:
     title: Saved settings
     hours_to_show: 24
     entities:
+      - entity: binary_sensor.living_room_enabled_history
+        name: Enabled
       - entity: sensor.living_room_target_position_history
         name: Target position
       - entity: sensor.living_room_buffer_history

@@ -20,15 +20,35 @@ Shelly, and other integrations.
 - Add each shutter manually in Home Assistant; nothing is discovered automatically.
 - Two independent sliders per shutter: **Target position** and **Buffer**.
 - Two numeric history sensors: **Target position history** and **Buffer history**.
+- A persistent **Enabled** switch and **Enabled history** binary sensor per device.
 - On startup and reload, the target adopts the actual position without movement;
   the buffer is retained.
 - German and English setup, entity names, and action error messages.
 - Existing cover entities and their manufacturer integrations remain in use.
-- Target slider availability follows the source cover; reconnection causes no movement.
+- While enabled, target slider availability follows the source cover; reconnection causes no movement.
 - All added shutters appear under **Natural Shutter** in the **Integrations** tab.
 - Reciprocal **Linked devices** navigation between each virtual device and its actuator.
 - Activity entries for sent position commands and targets suppressed by the
   position/buffer rule; optional phone notifications for suppressed movement.
+
+## Enable or deactivate a device
+
+Each virtual device has its own **Enabled** switch, initially off for new devices. Its state is
+saved independently and restored after restart, reload, and source reconfiguration.
+Existing devices without a saved activation setting start enabled.
+
+When switched off, target and buffer remain editable, even if the source is offline.
+Every changed target produces an Activity entry stating **No movement because
+Natural Shutter is deactivated**. No cover command or phone notification is sent,
+regardless of the buffer. If the actual position is unavailable, it is shown as
+unknown. The **Enabled history** binary sensor records on/off transitions through
+Recorder, alongside the two numeric history sensors.
+
+Switching on again does not move the shutter or replay a saved target; only a new
+target change can trigger a command. Switching off does not stop a command already
+sent to the source. Direct source-cover actions and external controls remain usable.
+On integration load, the target still adopts a valid live position without movement,
+including when deactivated. The saved activation state and buffer are retained.
 
 ## Target position and buffer
 
@@ -41,7 +61,8 @@ saved target until the next load.
 position and the requested position. Movement occurs only when you explicitly
 change the target, the shutter is away from that target, and the difference is at
 least the buffer. A buffer of 0 allows every changed target with a different actual
-position to send a command. Changing the buffer itself never causes movement.
+position to send a command while enabled. Changing the buffer itself never causes
+movement.
 
 Both sliders use 0–100%, step 1. Decimal action inputs are rounded to whole
 percentages (a half rounds up); invalid or out-of-range values are rejected.
@@ -109,7 +130,7 @@ source position without movement and the saved buffer is retained.
 1. Open **Settings → Devices & services → Add integration → Natural Shutter**.
 2. Select an existing cover. Optionally enter a distinguishable name.
 3. Repeat for each additional shutter. Each entry gets its own virtual device and
-   four entities; duplicate sources are rejected.
+   six entities; duplicate sources are rejected.
 
 Find all entries together under **Settings → Devices & services → Integrations →
 Natural Shutter**. On a virtual device's page, **Linked devices** opens the actuator
@@ -156,7 +177,9 @@ remain adjustable directly through their sliders.
 When you change the normalized target and the existing position/buffer rule prevents
 a position command, an **Activity** entry appears for the target slider and its
 virtual Natural Shutter device. The message distinguishes **Difference below buffer**
-from **Already at the requested position**. The new target remains saved.
+from **Already at the requested position**. Deactivated devices instead report
+**No movement because Natural Shutter is deactivated**, without phone notifications.
+The new target remains saved.
 
 When the integration issues a position command, it also creates a **Position command
 sent** entry after `cover.set_cover_position` returns successfully. This entry
@@ -189,10 +212,10 @@ Living room: No movement
 Target 30 → 70 %, actual 65 % (HA 35 %), HA target 30 %, difference 5 pp, buffer 10 pp.
 ```
 
-A difference equal to the buffer still sends a command and creates a **Position
+While enabled, a difference equal to the buffer sends a command and creates a **Position
 command sent** entry. Setting the same normalized target, buffer changes, external
 movement, startup, and reload create no position-decision entries or phone messages.
-Unavailable sources, invalid
+When enabled, unavailable sources, invalid
 positions, and failed cover actions retain their existing action errors and log
 messages. Later physical movement or position feedback is not monitored.
 
@@ -210,18 +233,19 @@ See [standard dashboard examples](examples/dashboard.yaml),
 - Installation, startup, reload, restoring values, reconnection, external movement,
   sensor updates, buffer changes, and setting the same normalized target cause no
   movement. There is no automatic correction of a saved target.
-- The target slider is unavailable when its source is missing, unknown, unavailable,
+- While enabled, the target slider is unavailable when its source is missing, unknown, unavailable,
   disabled, or only a restored placeholder. Offline target actions are skipped by HA
   without saving a new value. Once the source returns, the saved target reappears
-  without movement or alignment. The buffer and history sensors remain available.
-- If the source loses availability while an accepted target write is being saved,
+  without movement or alignment. Deactivating the device makes the target editable
+  regardless of source availability. The switch, buffer, and history sensors remain available.
+- While enabled, if the source loses availability while an accepted target write is being saved,
   or has an invalid actual position, the new target remains saved and the skipped
   action is reported in the UI/action trace and HA logs. Nothing is queued. A failed
   cover action also retains the target and is never automatically retried. To try
   again, explicitly select a different target when the source is available.
 - A source with a stable registry identity can be renamed. Sources without that
   identity require manual reconfiguration after an Entity-ID rename.
-- The two history sensors track settings, including targets that did not cause
+- The three history sensors track settings, including targets that did not cause
   movement. History availability and retention depend on your **Recorder** settings
   and filters; no independent archive or long-term statistics are created.
 - Calibration, travel direction, movement progress, and device communication remain
@@ -230,7 +254,7 @@ See [standard dashboard examples](examples/dashboard.yaml),
 ## Removal
 
 Remove the desired entry under **Settings → Devices & services → Natural Shutter**.
-Only that mapping's four entities and saved settings are removed. The source cover
+Only that mapping's six entities and saved settings are removed. The source cover
 and other mappings remain. Existing Recorder history follows Recorder's retention.
 After removing all entries, uninstall through HACS or remove the integration folder
 manually, then restart Home Assistant.

@@ -6,7 +6,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.translation import async_get_translations
 
-from custom_components.natural_shutter.const import BUFFER, DOMAIN, TARGET, storage_key
+from custom_components.natural_shutter.const import (
+    BUFFER,
+    DOMAIN,
+    ENABLED,
+    TARGET,
+    storage_key,
+)
 
 from .conftest import SimulatedCover, set_setting, setting_entity_id
 
@@ -72,7 +78,10 @@ async def test_target_availability_follows_source(
     await hass.async_block_till_done()
     assert hass.states.get(number_id).state == STATE_UNAVAILABLE
     await set_setting(hass, entry, TARGET, 60)
-    assert entry.runtime_data.values == snapshot
+    assert {
+        **entry.runtime_data.values,
+        ENABLED: entry.runtime_data.enabled,
+    } == snapshot
     assert hass_storage[storage_key(entry.entry_id)]["data"] == snapshot
     assert (
         hass.states.get(setting_entity_id(hass, entry, "sensor", TARGET)).state == "30"
@@ -139,9 +148,10 @@ async def test_source_availability_is_independent(hass, cover, add_shutter):
 
 
 async def test_device_grouping(hass, cover, add_shutter):
-    """Group all four entities on an owned virtual device named for the source."""
+    """Group all six entities on an owned virtual device named for the source."""
     entry = await add_shutter(cover, "Kitchen shutter")
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    assert len(entities) == 6
     device_ids = {entity.device_id for entity in entities}
     assert len(device_ids) == 1
     device = dr.async_get(hass).async_get(device_ids.pop())
@@ -168,4 +178,10 @@ async def test_german_and_english_names(hass, cover, add_shutter):
             != target
         )
         assert translations[f"component.{DOMAIN}.entity.sensor.buffer.name"] != buffer
+        assert translations[f"component.{DOMAIN}.entity.switch.enabled.name"] == (
+            "Aktiviert" if language == "de" else "Enabled"
+        )
+        assert translations[
+            f"component.{DOMAIN}.entity.binary_sensor.enabled.name"
+        ] == ("Aktiviert Verlauf" if language == "de" else "Enabled history")
     assert cover.commands == []
