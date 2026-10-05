@@ -22,7 +22,7 @@ async def async_setup_entry(
 
 
 class ShutterNumber(NaturalShutterEntity, NumberEntity):
-    """Expose saved percentages, with target availability following the source."""
+    """Expose saved percentages, allowing offline target editing when deactivated."""
 
     _attr_native_min_value = 0
     _attr_native_max_value = 100
@@ -39,8 +39,12 @@ class ShutterNumber(NaturalShutterEntity, NumberEntity):
 
     @property
     def available(self) -> bool:
-        """Keep the buffer available and expose the target only with a live source."""
-        return self.key == BUFFER or self.controller.source_available
+        """Allow disabled target edits; enabled targets require a live source."""
+        return (
+            self.key == BUFFER
+            or not self.controller.enabled
+            or self.controller.source_available
+        )
 
     @property
     def native_value(self) -> int:

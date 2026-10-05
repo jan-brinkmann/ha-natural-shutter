@@ -52,7 +52,8 @@ an input-number helper and a template cover; there is no device action.
 This YAML is a test fixture, not a requirement for normal Natural Shutter setup.
 
 1. Add Natural Shutter manually and select **Natural Shutter demo**.
-2. Confirm target 30%, buffer 0%, and exactly two numbers plus two sensors.
+2. Confirm target 30%, buffer 0%, activation on, and six entities: two numbers,
+   two numeric sensors, one activation switch, and one activation binary sensor.
 3. Change target to 70%; the simulated HA position helper should become 30%.
 4. Change the position helper directly to 45%; the saved target must stay 70%.
 5. Set buffer to 10%, change target to 71%, then back to 70%. The source should
@@ -63,7 +64,7 @@ This YAML is a test fixture, not a requirement for normal Natural Shutter setup.
    **Position command sent** Activity entry without a phone notification, including
    when the difference equals the buffer. An already reached position has its own reason.
 6. Use the [standard card example](../examples/dashboard.yaml) with the created IDs.
-   Confirm slider rendering and the setting sensors in History.
+   Confirm slider/switch rendering and all three setting sensors in History.
 7. Reload and restart: the target must equal 100 minus the simulated source position;
    the buffer and source position must stay unchanged, with no movement command.
 8. Rename the source entity ID in its settings; confirm preserved mapping and values.
@@ -87,6 +88,16 @@ Also trigger an allowed position command with a phone selected: confirm the
 Its actual position is the snapshot before dispatch. Failed actions do not produce
 a success entry; the integration does not confirm physical movement or target arrival.
 
+Turn **Enabled** off for one virtual device. Change its target and buffer: values
+must stay editable and saved, without changing the source position. Each changed
+target must create a **No movement because Natural Shutter is deactivated** entry
+without notifying the selected phone, including when the buffer would allow motion.
+Make the source unavailable and repeat: the disabled target remains editable and
+Activity shows an unknown position. Check activation on/off transitions in History.
+Reload/restart while off: activation must remain off, with no movement. Turn it
+back on: no saved target is replayed; a new changed target resumes normal behavior.
+If a second mapping exists, confirm it stays enabled and operates independently.
+
 Confirm all mappings appear together under **Integrations → Natural Shutter**.
 The template demo has no registered actuator device and therefore no device link.
 In a separate device-backed test setup, inspect **Linked devices** in both directions
@@ -98,6 +109,8 @@ actions, duplicate sources, endpoint buffers, listener cleanup, and concurrent w
 Suppression tests also check German/English message values, HA-local timestamps,
 phone selection and opt-out, missing or failed notification services, recipient
 persistence across reload/reconfiguration, action contexts, and target renames.
+Activation tests cover migration of existing settings, invalid saved activation,
+failed saves, disabled offline edits, per-device independence, and write ordering.
 The Recorder suite queries command and suppression entries using real Activity entity and
 device filters against isolated SQLite; it initializes the processor's filter
 configuration directly, without starting the frontend.

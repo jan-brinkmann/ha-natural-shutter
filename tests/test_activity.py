@@ -19,7 +19,7 @@ from custom_components.natural_shutter.const import (
     TARGET,
 )
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, set_enabled, set_setting, setting_entity_id
 
 
 @pytest.fixture
@@ -48,6 +48,122 @@ async def select_phone(hass, entry, service="mobile_app_test_phone"):
     await hass.async_block_till_done()
     assert result["type"] == "create_entry"
     assert entry.options[CONF_NOTIFICATION_SERVICE] == service
+
+
+@pytest.mark.parametrize("language", ["de", "en"])
+@pytest.mark.parametrize(
+    "actual, buffer, target",
+    [(70, 0, 70), (35, 10, 70), (30, 0, 70), (0, 100, 0)],
+)
+async def test_disabled_decisions_log_without_phone(
+    hass, cover, add_shutter, phone, activity_events, language, actual, buffer, target
+):
+    """Prefer the disabled reason over every buffer outcome and never notify a phone."""
+    hass.config.language = language
+    entry = await add_shutter(cover)
+    await select_phone(hass, entry)
+    await set_enabled(hass, entry, False)
+    cover.report(actual)
+    await set_setting(hass, entry, BUFFER, buffer)
+    context = Context()
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {
+            "entity_id": setting_entity_id(hass, entry, "number", TARGET),
+            "value": target,
+        },
+        blocking=True,
+        context=context,
+    )
+    await hass.async_block_till_done()
+    assert len(activity_events) == 1
+    event = activity_events[0]
+    reason = (
+        "Keine Fahrt, weil Natural Shutter deaktiviert ist"
+        if language == "de"
+        else "No movement because Natural Shutter is deactivated"
+    )
+    assert reason in event.data["message"]
+    assert event.data["entity_id"] == setting_entity_id(hass, entry, "number", TARGET)
+    assert event.context is context
+    assert entry.runtime_data.values[TARGET] == target
+    assert cover.commands == []
+    phone.assert_not_called()
+
+
+@pytest.mark.parametrize("source_state", ["offline", "missing", "invalid", "removed"])
+async def test_disabled_source_errors_still_log(
+    hass, cover, add_shutter, phone, activity_events, source_state
+):
+    """Log disabled changes even without a usable source position or registry entry."""
+    entry = await add_shutter(cover)
+    await select_phone(hass, entry)
+    await set_enabled(hass, entry, False)
+    if source_state == "offline":
+        cover.report(70, available=False)
+    elif source_state == "missing":
+        hass.states.async_remove(cover.entity_id)
+    elif source_state == "removed":
+        er.async_get(hass).async_remove(cover.entity_id)
+    else:
+        cover.report(None)
+    await hass.async_block_till_done()
+    await set_setting(hass, entry, TARGET, 70)
+    assert len(activity_events) == 1
+    assert "Natural Shutter is deactivated" in activity_events[0].data["message"]
+    assert "actual unknown %" in activity_events[0].data["message"]
+    assert entry.runtime_data.values[TARGET] == 70
+    assert cover.commands == []
+    phone.assert_not_called()
+
+
+async def test_reactivation_has_no_replay_and_restores_phone_behavior(
+    hass, cover, add_shutter, phone, activity_events
+):
+    """Resume normal decisions only for new target changes after reactivation."""
+    entry = await add_shutter(cover)
+    await select_phone(hass, entry)
+    await set_enabled(hass, entry, False)
+    await set_setting(hass, entry, TARGET, 70)
+    await set_setting(hass, entry, BUFFER, 100)
+    await set_enabled(hass, entry, True)
+    await set_setting(hass, entry, TARGET, 70)
+    assert len(activity_events) == 1
+    assert entry.options[CONF_NOTIFICATION_SERVICE] == "mobile_app_test_phone"
+    phone.assert_not_called()
+    await set_setting(hass, entry, TARGET, 80)
+    assert len(activity_events) == 2
+    assert "Difference below buffer" in activity_events[1].data["message"]
+    assert phone.call_count == 1
+    assert cover.commands == []
+
+
+async def test_disabled_notification_is_local_to_one_device(
+    hass, cover, add_shutter, phone, activity_events
+):
+    """Keep another device's suppressed phone messages when one device is off."""
+    other = SimulatedCover("Bedroom", 10)
+    await hass.data["cover"].async_add_entities([other])
+    first = await add_shutter(cover)
+    second = await add_shutter(other)
+    await select_phone(hass, first)
+    await select_phone(hass, second)
+    await set_enabled(hass, first, False)
+    await set_setting(hass, second, BUFFER, 100)
+    await set_setting(hass, first, TARGET, 70)
+    await set_setting(hass, second, TARGET, 70)
+    assert len(activity_events) == 2
+    assert "Natural Shutter is deactivated" in activity_events[0].data["message"]
+    assert activity_events[0].data["entity_id"] == setting_entity_id(
+        hass, first, "number", TARGET
+    )
+    assert activity_events[1].data["entity_id"] == setting_entity_id(
+        hass, second, "number", TARGET
+    )
+    assert phone.call_count == 1
+    assert other.entity_id in phone.call_args.args[0].data["message"]
+    assert cover.commands == other.commands == []
 
 
 @pytest.mark.parametrize("language", ["de", "en"])

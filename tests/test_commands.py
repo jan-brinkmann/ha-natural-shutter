@@ -13,7 +13,7 @@ from homeassistant.const import (
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.natural_shutter.const import BUFFER, TARGET, storage_key
+from custom_components.natural_shutter.const import BUFFER, ENABLED, TARGET, storage_key
 from custom_components.natural_shutter.source import (
     normalize_percentage,
     valid_percentage,
@@ -68,6 +68,7 @@ async def test_buffer_algorithm(
     assert hass_storage[storage_key(entry.entry_id)]["data"] == {
         TARGET: target,
         BUFFER: buffer,
+        ENABLED: True,
     }
 
 

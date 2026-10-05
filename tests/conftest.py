@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
-from custom_components.natural_shutter.const import CONF_SOURCE, DOMAIN
+from custom_components.natural_shutter.const import CONF_SOURCE, DOMAIN, ENABLED
 
 
 class SimulatedCover(CoverEntity):
@@ -73,7 +73,7 @@ def add_shutter(hass: HomeAssistant) -> Callable[..., Coroutine[Any, Any, Config
     """Return a helper that creates an entry using the actual manual config flow."""
 
     async def add(entity: SimulatedCover, name: str | None = None) -> ConfigEntry:
-        """Create a mapping and wait until its numbers and sensors are loaded."""
+        """Create a mapping and wait until all setting entities are loaded."""
         data = {CONF_SOURCE: entity.entity_id}
         if name is not None:
             data[CONF_NAME] = name
@@ -107,6 +107,17 @@ async def set_setting(
         "number",
         "set_value",
         {"entity_id": setting_entity_id(hass, entry, "number", key), "value": value},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+
+async def set_enabled(hass: HomeAssistant, entry: ConfigEntry, enabled: bool) -> None:
+    """Write through the activation switch and wait for history publication."""
+    await hass.services.async_call(
+        "switch",
+        "turn_on" if enabled else "turn_off",
+        {"entity_id": setting_entity_id(hass, entry, "switch", ENABLED)},
         blocking=True,
     )
     await hass.async_block_till_done()

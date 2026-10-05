@@ -33,6 +33,7 @@ from .const import (
     CONF_SOURCE,
     CONF_SOURCE_REGISTRY_ID,
     DOMAIN,
+    ENABLED,
     STORAGE_VERSION,
     TARGET,
     storage_key,
@@ -58,7 +59,8 @@ class ShutterController:
         self.entry = entry
         self.device_link = ShutterDeviceLink(hass, entry)
         self.values = {TARGET: 0, BUFFER: 0}
-        self.store: Store[dict[str, int]] = Store(
+        self.enabled = True
+        self.store: Store[dict[str, int | bool]] = Store(
             hass, STORAGE_VERSION, storage_key(entry.entry_id), atomic_writes=True
         )
         self._lock = asyncio.Lock()
@@ -66,6 +68,7 @@ class ShutterController:
         self._listeners: dict[str, list[Callable[[], None]]] = {
             TARGET: [],
             BUFFER: [],
+            ENABLED: [],
         }
         self._unsubscribe_registry: CALLBACK_TYPE | None = None
         self._unsubscribe_source: CALLBACK_TYPE | None = None
@@ -87,9 +90,10 @@ class ShutterController:
         return registry_entry is None or not registry_entry.disabled
 
     async def async_load(self) -> None:
-        """Restore the buffer and align the target with a valid live position.
+        """Restore activation and buffer, aligning the target with a live position.
 
         Without a live position, retain the saved target or initial fallback.
+        Existing settings without activation default to enabled.
         Persist the resulting settings before activation without calling a setter
         or dispatching any command. Invalid saved data stops setup with an error.
         After validation, register the owned device and track source device links.
@@ -106,6 +110,9 @@ class ShutterController:
                     TARGET: normalize_percentage(stored[TARGET]),
                     BUFFER: normalize_percentage(stored[BUFFER]),
                 }
+                self.enabled = stored.get(ENABLED, True)
+                if not isinstance(self.enabled, bool):
+                    raise ValueError("Saved activation must be a boolean")
             except (KeyError, TypeError, ValueError) as err:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN, translation_key="invalid_storage"
@@ -116,8 +123,9 @@ class ShutterController:
         )
         if position is not None:
             self.values[TARGET] = normalize_percentage(100 - position)
-        if stored is None or self.values != stored:
-            await self.store.async_save(dict(self.values))
+        settings = {**self.values, ENABLED: self.enabled}
+        if settings != stored:
+            await self.store.async_save(settings)
         self._active = True
         self.device_link.async_start()
         self._async_registry_changed(None)
@@ -222,10 +230,11 @@ class ShutterController:
     async def async_set_value(
         self, key: str, value: float, context: Context | None = None
     ) -> None:
-        """Save a changed setting; only target writes may issue one cover command.
+        """Save a changed percentage; enabled target writes may issue a command.
 
         Writes are processed in lock acquisition order, including the blocking
         action call, Activity reporting, and optional suppression notification.
+        Disabled target writes only report a decision, without phone notifications.
         Errors never roll back a saved target or queue a retry.
         """
         try:
@@ -244,18 +253,53 @@ class ShutterController:
                 return
             previous_target = self.values[TARGET]
             updated = {**self.values, key: normalized}
-            await self.store.async_save(updated)
+            await self.store.async_save({**updated, ENABLED: self.enabled})
             self.values = updated
             for listener in tuple(self._listeners[key]):
                 listener()
             if key == TARGET and self._active:
                 await self._async_command(normalized, previous_target, context)
 
+    async def async_set_enabled(self, enabled: bool) -> None:
+        """Persist activation in write order without dispatching or replaying targets.
+
+        Publish the switch, history sensor, and target availability only after the
+        save succeeds. An unloaded controller rejects writes with an action error.
+        """
+        async with self._lock:
+            if not self._active:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="entry_unloaded"
+                )
+            if enabled == self.enabled:
+                return
+            await self.store.async_save({**self.values, ENABLED: enabled})
+            self.enabled = enabled
+            for key in (ENABLED, TARGET):
+                for listener in tuple(self._listeners[key]):
+                    listener()
+
     async def _async_command(
         self, target: int, previous_target: int, context: Context | None
     ) -> None:
-        """Report suppressed writes or successful commands under the buffer rule."""
+        """Report disabled writes before validation; otherwise apply the buffer rule."""
         source = resolve_source(self.hass, self.entry.data)
+        if not self.enabled:
+            await async_report_decision(
+                self.hass,
+                self.entry,
+                source=source or self.entry.data[CONF_SOURCE],
+                previous_target=previous_target,
+                target=target,
+                position=current_position(
+                    self.hass.states.get(source) if source is not None else None
+                ),
+                buffer=self.values[BUFFER],
+                context=context,
+                command_sent=False,
+                enabled=False,
+            )
+            return
         if (
             source is None
             or (state := self.hass.states.get(source)) is None

@@ -17,9 +17,9 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.natural_shutter.const import BUFFER, TARGET
+from custom_components.natural_shutter.const import BUFFER, ENABLED, TARGET
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, set_enabled, set_setting, setting_entity_id
 
 
 @pytest.fixture
@@ -43,37 +43,43 @@ async def test_recorder_stores_setting_transitions(hass, cover, add_shutter):
     recorder = get_instance(hass)
     start = dt_util.utcnow() - timedelta(seconds=1)
     entry = await add_shutter(cover)
+    await set_enabled(hass, entry, False)
     await set_setting(hass, entry, BUFFER, 100)
     await set_setting(hass, entry, TARGET, 70)
     await set_setting(hass, entry, TARGET, 80)
     await set_setting(hass, entry, TARGET, 80)
+    await set_enabled(hass, entry, True)
     await async_wait_recording_done(hass)
     target_id = setting_entity_id(hass, entry, "sensor", TARGET)
     buffer_id = setting_entity_id(hass, entry, "sensor", BUFFER)
+    enabled_id = setting_entity_id(hass, entry, "binary_sensor", ENABLED)
     states = await recorder.async_add_executor_job(
         partial(
             history.get_significant_states,
             hass,
             start,
-            entity_ids=[target_id, buffer_id],
+            entity_ids=[target_id, buffer_id, enabled_id],
             significant_changes_only=False,
         )
     )
     assert [state.state for state in states[target_id]] == ["30", "70", "80"]
     assert [state.state for state in states[buffer_id]] == ["0", "100"]
+    assert [state.state for state in states[enabled_id]] == ["on", "off", "on"]
     assert cover.commands == []
 
 
-@pytest.mark.parametrize("suppressed", [True, False])
+@pytest.mark.parametrize("decision", ["buffer", "command", "disabled"])
 async def test_decisions_are_in_entity_and_device_activity(
-    hass, cover, add_shutter, suppressed
+    hass, cover, add_shutter, decision
 ):
     """Retrieve command and suppression snapshots through real Activity filters."""
     hass.data["logbook"] = LogbookConfig({}, None, None)
     recorder = get_instance(hass)
     start = dt_util.utcnow() - timedelta(seconds=1)
     entry = await add_shutter(cover)
-    buffer = 100 if suppressed else 10
+    buffer = 100 if decision == "buffer" else 10
+    if decision == "disabled":
+        await set_enabled(hass, entry, False)
     await set_setting(hass, entry, BUFFER, buffer)
     await set_setting(hass, entry, TARGET, 70)
     await async_wait_recording_done(hass)
@@ -100,10 +106,12 @@ async def test_decisions_are_in_entity_and_device_activity(
         assert messages[0]["entity_id"] == target_id
         assert messages[0]["domain"] == "natural_shutter"
         reason = (
-            "Difference below buffer"
-            if suppressed
+            "No movement because Natural Shutter is deactivated"
+            if decision == "disabled"
+            else "Difference below buffer"
+            if decision == "buffer"
             else "Position command sent to source cover"
         )
         assert reason in messages[0]["message"]
         assert f"difference 40 pp, buffer {buffer} pp" in messages[0]["message"]
-    assert cover.commands == ([] if suppressed else [30])
+    assert cover.commands == ([30] if decision == "command" else [])

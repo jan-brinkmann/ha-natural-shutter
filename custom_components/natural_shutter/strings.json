@@ -27,7 +27,7 @@
     "step": {
       "init": {
         "title": "Notifications for suppressed movement",
-        "description": "Choose a phone registered with the Home Assistant Companion App, or disable push notifications. A changed target suppressed by the position/buffer rule always creates an Activity entry. This option takes effect immediately without reloading or moving the shutter.",
+        "description": "Choose a phone registered with the Home Assistant Companion App, or disable push notifications. A changed target suppressed by the position/buffer rule always creates an Activity entry. Deactivated Natural Shutter devices still log target changes but never send phone notifications. This option takes effect immediately without reloading or moving the shutter.",
         "data": {"notification_service": "Phone notification service"}
       }
     },
@@ -43,9 +43,17 @@
     "movement_decision_message": "{timestamp} · {source}: {reason}. Target {previous_target} → {target} %, actual {actual} % (HA {position} %), HA target {ha_target} %, difference {distance} pp, buffer {buffer} pp.",
     "command_sent": "Position command sent to source cover",
     "already_at_target": "Already at the requested position",
-    "below_buffer": "Difference below buffer"
+    "below_buffer": "Difference below buffer",
+    "integration_disabled": "No movement because Natural Shutter is deactivated",
+    "position_unknown": "unknown"
   },
   "entity": {
+    "switch": {
+      "enabled": {"name": "Enabled"}
+    },
+    "binary_sensor": {
+      "enabled": {"name": "Enabled history"}
+    },
     "number": {
       "target_position": {"name": "Target position"},
       "buffer": {"name": "Buffer"}

@@ -21,12 +21,13 @@ from custom_components.natural_shutter.const import (
     BUFFER,
     CONF_SOURCE,
     DOMAIN,
+    ENABLED,
     TARGET,
     storage_key,
 )
 from custom_components.natural_shutter.controller import ShutterController
 
-from .conftest import SimulatedCover, set_setting, setting_entity_id
+from .conftest import SimulatedCover, set_enabled, set_setting, setting_entity_id
 
 
 async def test_offline_reload_retains_target_without_actions(hass, cover, add_shutter):
@@ -41,10 +42,11 @@ async def test_offline_reload_retains_target_without_actions(hass, cover, add_sh
     assert previous._unsubscribe_registry is None
     assert previous._unsubscribe_source is None
     assert previous.device_link._unsubscribe is None
-    assert previous._listeners == {TARGET: [], BUFFER: []}
+    assert previous._listeners == {TARGET: [], BUFFER: [], ENABLED: []}
     assert entry.runtime_data.values == {TARGET: 60, BUFFER: 100}
     assert len(entry.runtime_data._listeners[TARGET]) == 2
     assert len(entry.runtime_data._listeners[BUFFER]) == 2
+    assert len(entry.runtime_data._listeners[ENABLED]) == 2
     number_id = setting_entity_id(hass, entry, "number", TARGET)
     assert hass.states.get(number_id).state == STATE_UNAVAILABLE
     cover.report(5)
@@ -73,7 +75,10 @@ async def test_reload_aligns_target_without_actions(
     await hass.async_block_till_done()
     values = {TARGET: expected, BUFFER: buffer}
     assert entry.runtime_data.values == values
-    assert hass_storage[storage_key(entry.entry_id)]["data"] == values
+    assert hass_storage[storage_key(entry.entry_id)]["data"] == {
+        **values,
+        ENABLED: True,
+    }
     for kind in ("number", "sensor"):
         for key in (TARGET, BUFFER):
             assert hass.states.get(
@@ -116,13 +121,17 @@ async def test_reload_without_live_position_retains_target(
     await hass.async_block_till_done()
     values = {TARGET: 60, BUFFER: 100}
     assert entry.runtime_data.values == values
-    assert hass_storage[storage_key(entry.entry_id)]["data"] == values
+    assert hass_storage[storage_key(entry.entry_id)]["data"] == {
+        **values,
+        ENABLED: True,
+    }
     assert cover.commands == []
 
 
 async def test_restart_aligns_target_without_actions(hass, cover, add_shutter):
-    """Align the target and restore the buffer in a fresh HA instance without motion."""
+    """Align the target and restore buffer and activation in a fresh HA instance."""
     entry = await add_shutter(cover)
+    await set_enabled(hass, entry, False)
     await set_setting(hass, entry, BUFFER, 100)
     await set_setting(hass, entry, TARGET, 60)
     entry_data = dict(entry.data)
@@ -151,6 +160,14 @@ async def test_restart_aligns_target_without_actions(hass, cover, add_shutter):
             await restarted.async_start()
             await restarted.async_block_till_done()
             assert restored.runtime_data.values == {TARGET: 95, BUFFER: 100}
+            assert restored.runtime_data.enabled is False
+            for kind in ("switch", "binary_sensor"):
+                assert (
+                    restarted.states.get(
+                        setting_entity_id(restarted, restored, kind, ENABLED)
+                    ).state
+                    == "off"
+                )
             for kind in ("number", "sensor"):
                 assert (
                     restarted.states.get(
@@ -246,7 +263,7 @@ async def test_remove_one_mapping_and_clean_listeners(
     assert storage_key(entry.entry_id) not in hass_storage
     assert storage_key(retained.entry_id) in hass_storage
     assert er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id) == []
-    assert controller._listeners == {TARGET: [], BUFFER: []}
+    assert controller._listeners == {TARGET: [], BUFFER: [], ENABLED: []}
     assert controller._unsubscribe_registry is None
     assert controller._unsubscribe_source is None
     assert controller.device_link._unsubscribe is None

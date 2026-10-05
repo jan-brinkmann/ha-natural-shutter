@@ -108,7 +108,7 @@ async def test_all_mappings_appear_in_integrations(
     assert {entry["domain"] for entry in response["result"]} == {DOMAIN}
     for entry in (first, second):
         entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-        assert len(entities) == 4
+        assert len(entities) == 6
         assert {entity.device_id for entity in entities} == {own_device(hass, entry).id}
     await registry_client.send_json_auto_id(
         {"type": "config_entries/get", "domain": DOMAIN, "type_filter": ["helper"]}

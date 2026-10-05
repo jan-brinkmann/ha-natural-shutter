@@ -22,6 +22,43 @@ An already available isolated test environment was used at
 tree. All device commands in the tests targeted simulated entities or the
 hardware-free template-cover example.
 
+## Per-device activation (2026-10-05)
+
+Each virtual device now has a persistent activation switch and a binary history
+sensor. Disabled target changes remain saved and produce a localized disabled
+Activity entry, including when the source is unavailable, without cover commands
+or phone notifications. Target and buffer stay editable. Activation is independent
+per entry and survives reload, restart, and source replacement. Existing settings
+default to enabled; enabling does not replay a saved target.
+
+| Executed command | Result |
+| --- | --- |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q tests/test_activation.py tests/test_activity.py tests/test_entities.py tests/test_lifecycle.py tests/test_recorder.py` | **98 passed**, 8.78 seconds (before the final additional independence checks) |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m pytest -q --cov --cov-report=term-missing` | **197 passed**, 16.03 seconds; 100% measured coverage of 514 statements and 114 branches |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff check .` | Passed |
+| `/tmp/shelly-led-night-mode-venv/bin/python -m ruff format --check .` | Passed; 32 Python files |
+| `python3.14 -m compileall -q custom_components tests scripts` | Passed |
+| `python3.14 scripts/validate_project.py` | Stopped at a pre-existing mismatch: manifest version `1.1.0` has no matching heading in `CHANGELOG.md` (only `1.0.0`) |
+| `python3.14 /tmp/natural-shutter-validate-remainder.py` | All remaining packaging, JSON, translation, placeholder, and docstring checks passed |
+| `git diff --check` | Passed |
+
+The temporary remainder runner removed only the changelog-heading assertion from
+the validator's in-memory AST; it did not edit the validator, manifest, or changelog.
+The read-only HEAD manifest confirms that `1.1.0` predates this task. Version and
+release files remain unchanged. No physical devices or real phones were contacted.
+UI rendering and a production Home Assistant installation were not exercised.
+
+Files changed for this task:
+
+- Integration: `custom_components/natural_shutter/const.py`, `controller.py`,
+  `number.py`, `activity.py`, new `switch.py`, new `binary_sensor.py`, `strings.json`,
+  `translations/de.json`, and `translations/en.json`.
+- Tests: `tests/conftest.py`, new `test_activation.py`, `test_activity.py`,
+  `test_commands.py`, `test_config_flow.py`, `test_devices.py`, `test_entities.py`,
+  `test_examples.py`, `test_lifecycle.py`, and `test_recorder.py`.
+- Documentation and example: `README.md`, `README.de.md`, `ARCHITECTURE.md`,
+  `docs/TESTING.md`, `docs/VALIDATION.md`, and `examples/dashboard.yaml`.
+
 ## Initial implementation results
 
 | Executed command | Result |
